@@ -1,0 +1,25 @@
+# Python virtual environments
+venv/
+env/
+ENV/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Data files
+*.parquet
+*.csv
+*.json
+
+# Graphics files
+*.png
+*.jpg
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
