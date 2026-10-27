@@ -11,8 +11,8 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def add_pre_event_score(pbp: pd.DataFrame) -> pd.DataFrame:
-    """Score BEFORE each event. Using the row's own score would leak the shot result."""
-    pbp = pbp.sort_values("actionNumber").copy()
+    # Score BEFORE each event. Using the row's own score would leak the shot result.
+    pbp = pbp.sort_values("actionId").copy()
     for c in ("scoreHome", "scoreAway"):
         pbp[c] = pd.to_numeric(pbp[c], errors="coerce")  # '' -> NaN
     pbp["pre_home"] = pbp["scoreHome"].ffill().fillna(0).shift(1, fill_value=0)
