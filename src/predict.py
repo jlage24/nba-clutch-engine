@@ -92,6 +92,17 @@ def predict_make_probability(
     else:
         feats_df = build_features(shot)
 
+    # Domain guardrail: enforce minimum SHOT_DISTANCE_FT of 1.0 unless IS_PUTBACK is true.
+    # Documented reason: in training data, distance 0 occurs almost exclusively on tips and
+    # putbacks (98%), where conversion is 53.5% rather than a controlled layup (70.3%). The
+    # model has only seen distance 0 on tips/putbacks. Non-putback attempts (e.g. driving layups)
+    # specified at distance < 1.0 ft are clamped to 1.0 ft to ensure they receive controlled
+    # rim attempt attribution rather than the tip/putback distance distribution.
+    mask_clamp = (feats_df["IS_PUTBACK"] == 0) & (feats_df["SHOT_DISTANCE_FT"] < 1.0)
+    if mask_clamp.any():
+        feats_df = feats_df.copy()
+        feats_df.loc[mask_clamp, "SHOT_DISTANCE_FT"] = 1.0
+
     X = feats_df[features]
 
     # Predict raw probability P(make = 1)
