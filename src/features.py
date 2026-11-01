@@ -174,11 +174,19 @@ if __name__ == "__main__":
     feats = build_features(pd.read_parquet(SRC))
     feats.to_parquet(OUT, index=False)
 
-    print(f"rows: {len(feats):,} | seasons: {sorted(feats['SEASON'].unique())}")
+    seasons = [int(s) for s in sorted(feats["SEASON"].unique())]
+    print(f"rows: {len(feats):,} | seasons: {seasons}")
     print(f"FG%: {feats[TARGET].mean():.3f}")
     print("NaNs per feature:", int(feats[FEATURES].isna().sum().sum()))
-    print("\nAction groups (check that 'other' is small):")
-    print(feats["ACTION_GROUP"].value_counts())
+
+    print("\nAction group breakdown (count & FG%):")
+    ag_summary = feats.groupby("ACTION_GROUP", observed=False)[TARGET].agg(
+        count="count",
+        fg_pct="mean",
+    )
+    ag_summary["fg_pct"] = ag_summary["fg_pct"].round(3)
+    print(ag_summary.sort_values(by="count", ascending=False))
+
     print("\nNumeric feature summary:")
     print(feats[NUMERIC].describe().round(2).T[["min", "mean", "max"]])
 
