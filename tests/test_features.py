@@ -108,7 +108,12 @@ def test_is_ot():
 
 
 def test_game_id_parsing():
-    """Verify season extraction and playoff flag from GAME_ID."""
+    """Verify season extraction and playoff flag from GAME_ID, and format_season helper."""
+    from src.features import format_season
+    assert format_season(2025) == "2025-26"
+    assert format_season(2024) == "2024-25"
+    assert format_season("2023") == "2023-24"
+
     df = pd.DataFrame([
         {"GAME_ID": "0022500001", "LOC_X": 0, "LOC_Y": 50, "SCORE_MARGIN": 0, "MINUTES_REMAINING": 1, "SECONDS_REMAINING": 0, "PERIOD": 4, "SHOT_TYPE": "2PT", "ACTION_TYPE": "Jump Shot"},
         {"GAME_ID": "0042400101", "LOC_X": 0, "LOC_Y": 50, "SCORE_MARGIN": 0, "MINUTES_REMAINING": 1, "SECONDS_REMAINING": 0, "PERIOD": 4, "SHOT_TYPE": "2PT", "ACTION_TYPE": "Jump Shot"},

@@ -18,8 +18,7 @@ TARGET = "SHOT_MADE_FLAG"
 ID_COLS = ["GAME_ID", "GAME_EVENT_ID", "PLAYER_ID", "PLAYER_NAME", "TEAM_ID", "SEASON"]
 NUMERIC = [
     "TIME_REMAINING_SEC", "SCORE_MARGIN", "SHOT_DISTANCE_FT", "SHOT_ANGLE",
-    "LOC_X", "LOC_Y", "SHOT_VALUE", "IS_OT", "IS_HOME", "IS_PLAYOFFS",
-    "LOC_PLACEHOLDER", "IS_PUTBACK",
+    "LOC_X", "LOC_Y", "SHOT_VALUE", "IS_OT", "IS_HOME", "IS_PUTBACK",
 ]
 CATEGORICAL = ["ACTION_GROUP"]
 FEATURES = NUMERIC + CATEGORICAL
@@ -178,8 +177,16 @@ def build_features(df: Union[pd.DataFrame, dict, pd.Series]) -> pd.DataFrame:
         if col not in df.columns:
             raise KeyError(f"Missing required numeric feature: '{col}'")
 
-    out_cols = [c for c in ID_COLS if c in df.columns] + FEATURES + ([TARGET] if TARGET in df.columns else [])
+    # Include non-feature metadata/diagnostic columns if present
+    diagnostic_cols = [c for c in ["LOC_PLACEHOLDER", "IS_PLAYOFFS"] if c in df.columns and c not in FEATURES]
+    out_cols = [c for c in ID_COLS if c in df.columns] + FEATURES + diagnostic_cols + ([TARGET] if TARGET in df.columns else [])
     return df[out_cols]
+
+
+def format_season(season: Union[int, str]) -> str:
+    """Format an integer or string season year as an NBA season label (e.g. 2025 -> '2025-26')."""
+    s = int(season)
+    return f"{s}-{str(s + 1)[-2:]}"
 
 
 def split(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -188,7 +195,8 @@ def split(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame]:
     if len(seasons) >= 2:
         test = df["SEASON"] == seasons[-1]
         return df[~test], df[test]
-    print("Only one season available: using a grouped-by-game 80/20 split instead.")
+    season_lbl = format_season(seasons[0])
+    print(f"Only one season available ({season_lbl}): using a grouped-by-game 80/20 holdout split.")
     gss = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=42)
     train_idx, test_idx = next(gss.split(df, groups=df["GAME_ID"]))
     return df.iloc[train_idx], df.iloc[test_idx]
@@ -199,7 +207,7 @@ if __name__ == "__main__":
     feats.to_parquet(OUT, index=False)
 
     seasons = [int(s) for s in sorted(feats["SEASON"].unique())]
-    print(f"rows: {len(feats):,} | seasons: {seasons}")
+    print(f"rows: {len(feats):,} | seasons: {seasons} ({[format_season(s) for s in seasons]})")
     print(f"FG%: {feats[TARGET].mean():.3f}")
     print("NaNs per feature:", int(feats[FEATURES].isna().sum().sum()))
 
