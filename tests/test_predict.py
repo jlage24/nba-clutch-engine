@@ -5,7 +5,15 @@ import pandas as pd
 import pytest
 
 from src.features import SRC, build_features, split
-from src.predict import expected_points, load_artifacts, predict_make_probability
+from src.predict import MODELS_DIR, expected_points, load_artifacts, predict_make_probability
+
+MODELS_PRESENT = (MODELS_DIR / "xgb_model.joblib").exists() and (MODELS_DIR / "features.joblib").exists()
+DATA_PRESENT = SRC.exists()
+
+pytestmark = pytest.mark.skipif(
+    not MODELS_PRESENT,
+    reason="Trained model artifacts not found under models/. Run 'python src/train.py' first.",
+)
 
 
 def test_load_artifacts():
@@ -49,6 +57,10 @@ def test_predict_single_shot_bounds():
     assert np.isclose(xp_cal, p_cal * 2.0)
 
 
+@pytest.mark.skipif(
+    not DATA_PRESENT,
+    reason="Processed clutch shots data not found under data/processed/.",
+)
 def test_single_dict_equals_batch_predictions():
     """Predictions for individual dicts must match batch predictions on a DataFrame."""
     raw_df = pd.read_parquet(SRC)
