@@ -3,5 +3,6 @@ nba_api==1.11.4
 numpy==2.5.4
 pandas==3.0.6
 pyarrow==26.0.0
+pytest==9.2.0
 scikit-learn==1.9.1
 xgboost==3.4.1
