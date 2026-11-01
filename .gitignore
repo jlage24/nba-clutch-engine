@@ -15,6 +15,9 @@ __pycache__/
 *.json
 !docs/*.json
 
+# Model binaries and exported models
+models/
+
 # IDE files
 .vscode/
 .idea/

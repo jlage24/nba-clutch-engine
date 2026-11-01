@@ -375,7 +375,7 @@ def format_paired_diff_table(
         ci_str = f"[{stats['ci_lower']:+.4f}, {stats['ci_upper']:+.4f}]"
         se_str = f"{stats['std_err']:.4f}"
         p_val = stats["p_value"]
-        p_str = "< 0.001" if p_val < 0.001 else f"{p_val:.3f}"
+        p_str = "< 0.002" if p_val < 0.002 else f"{p_val:.3f}"
         rows.append(f"| {metric_name} | {diff_str} | {ci_str} | {se_str} | {p_str} |")
 
     return "\n".join(rows)
