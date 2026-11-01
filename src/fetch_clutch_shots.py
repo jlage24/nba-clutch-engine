@@ -7,7 +7,8 @@ import pandas as pd
 
 SEASON = ["2025-26", "2024-25", "2023-24", "2022-23"][0]
 SEASON_TYPE = ["Regular Season", "Playoffs"][0]
-DATA_DIR = Path("data")
+ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = ROOT / "data"
 DATA_DIR.mkdir(exist_ok=True)
 
 def fetch_team_shots(team_id: int, retries: int = 3) -> pd.DataFrame:
