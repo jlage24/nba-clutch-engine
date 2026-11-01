@@ -10,9 +10,14 @@ __pycache__/
 *.pyd
 
 # Data files
+data/
 *.parquet
 *.csv
 *.json
+!docs/*.json
+
+# Model binaries and exported models
+models/
 
 # IDE files
 .vscode/
