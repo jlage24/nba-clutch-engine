@@ -10,6 +10,7 @@ __pycache__/
 *.pyd
 
 # Data files
+data/
 *.parquet
 *.csv
 *.json
