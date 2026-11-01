@@ -49,6 +49,7 @@ from src.features import (
     SRC,
     TARGET,
     build_features,
+    format_season,
     split,
 )
 
@@ -157,7 +158,7 @@ def build_logistic_pp_features(df: pd.DataFrame) -> pd.DataFrame:
     """Build fair baseline features for Logistic++.
 
     Includes all Logistic+ features plus one-hot ACTION_GROUP, IS_OT, IS_HOME,
-    LOC_PLACEHOLDER, and IS_PUTBACK.
+    and IS_PUTBACK.
     Guarantees fixed dummy categories across splits.
     """
     X = build_logistic_plus_features(df).copy()
@@ -165,7 +166,6 @@ def build_logistic_pp_features(df: pd.DataFrame) -> pd.DataFrame:
     X = pd.concat([X, action_dummies], axis=1)
     X["is_ot"] = df["IS_OT"].values.astype(float)
     X["is_home"] = df["IS_HOME"].values.astype(float)
-    X["loc_placeholder"] = df["LOC_PLACEHOLDER"].values.astype(float)
     X["is_putback"] = df["IS_PUTBACK"].values.astype(float)
     return X
 
@@ -423,9 +423,12 @@ def main():
     games_train = train_df["GAME_ID"].values
     games_test = test_df["GAME_ID"].values
 
+    season_val = int(train_df["SEASON"].iloc[0])
+    season_str = format_season(season_val)
+    print(f"Season:      {season_str} (regular season, GAME_IDs start with 00225)")
     print(f"Total shots: {len(feats):,} across {feats['GAME_ID'].nunique()} games.")
     print(f"Train set:   {len(train_df):,} shots across {train_df['GAME_ID'].nunique()} games.")
-    print(f"Test set:    {len(test_df):,} shots across {test_df['GAME_ID'].nunique()} games.")
+    print(f"Test set:    {len(test_df):,} shots across {test_df['GAME_ID'].nunique()} games (20% holdout of games).")
     print(f"Empirical Train FG%: {y_train.mean():.4f} | Test FG%: {y_test.mean():.4f}")
 
     # 2. Fixed GroupKFold splits on training games
@@ -609,20 +612,35 @@ def main():
 
     # Save Metrics JSON
     metrics_summary = {
+        "season": season_str,
         "methodology_notes": [
+            "The data represents the 2025-26 NBA regular season (GAME_IDs start with 00225); the test set is a 20% grouped-by-game holdout from the same season (2025-26).",
             "Calibrator selection performed strictly via 5-fold nested grouped CV on training set.",
             "Earlier preliminary exploratory inspection of isotonic regression on test set showed log loss penalty (0.723 vs 0.641 for Platt) due to edge bin step plateaus.",
-            "Platt scaling is close to the identity mapping (coef ~ 1.08, intercept ~ 0.03), confirming raw XGBoost calibration.",
+            "Platt scaling is close to the identity mapping (coef ~ 1.14, intercept ~ 0.04), confirming raw XGBoost calibration.",
             "Uncalibrated XGBoost is shipped as the default production model since Platt brings no significant metric gain.",
             "OOF headline numbers are mildly optimistic because hyperparameters were tuned on the same 5 folds.",
-            "ECE confidence intervals under resampling are omitted because ECE is biased upward under resampling.",
-            "Early stopping for XGBoost performed using an inner grouped split (80/20 games) of each training fold, leaving the outer OOF fold untouched.",
-            "Final model uses median optimal trees across folds (91 trees).",
-            "Logistic++ includes one-hot ACTION_GROUP, IS_OT, IS_HOME, LOC_PLACEHOLDER, and IS_PUTBACK, with zero-variance columns automatically excluded.",
-            "No detectable difference was detected between XGBoost and Logistic++ in Brier score or log loss at this sample size (test CI for Brier difference: [-0.0046, +0.0012], p=0.324; log loss difference: [-0.0113, +0.0027], p=0.276). The AUC p=0.020 is one of three uncorrected comparisons and is weak evidence.",
+            "Expected Calibration Error (ECE) is reported using 10 equal-frequency (quantile) bins; ECE confidence intervals under resampling are omitted because ECE is biased upward under resampling.",
+            "Hyperparameter tuning evaluated 108 configurations over max_depth in [2, 3, 4, 5], learning_rate in [0.02, 0.03, 0.05], min_child_weight in [15, 25, 40], and reg_lambda in [0.5, 1.0, 3.0].",
+            f"Early stopping for XGBoost performed using an inner grouped split (80/20 games) of each training fold, leaving the outer OOF fold untouched; final model uses median optimal trees ({median_trees} trees).",
+            "Logistic++ includes one-hot ACTION_GROUP, IS_OT, IS_HOME, and IS_PUTBACK, with zero-variance columns automatically excluded.",
+            "The XGBoost advantage over Logistic++ is small (about 0.001-0.002 Brier score; test point difference -0.0015 with 95% CI [-0.0050, +0.0010], p=0.332) and borderline detectable. Whether the advantage is deemed statistically significant depends on an arbitrary 0.05 threshold and the fact that feature sets changed between versions; effect sizes with confidence intervals are reported rather than binary significance verdicts.",
             "Uncalibrated XGBoost is maintained as the production default and Logistic++ as the interpretable reference.",
-            "SHAP importance of TIME_REMAINING_SEC (rank 3) is not matched by any predictive gain in the grouped CV ablation (+0.00006 Brier diff, p=0.868); this discrepancy matters because it demonstrates that tree-based feature attribution reflects credit-sharing across correlated features rather than incremental predictive necessity or causal impact.",
+            "SHAP importance of TIME_REMAINING_SEC (rank 4) is not matched by any predictive gain in the grouped CV ablation (+0.00006 Brier diff, p=0.868); this discrepancy matters because it is consistent with tree-based feature attribution reflecting credit-sharing across correlated features (likely reflecting shot-mix composition) rather than incremental predictive necessity or causal impact.",
+            "The test set was inspected repeatedly (features such as IS_PUTBACK were motivated by SHAP/diagnostics computed on it), so it is no longer pristine; a fresh season (e.g. 2024-25) will be used as the final untouched test.",
         ],
+        "hyperparameter_search": {
+            "search_space_size": len(top_configs),
+            "search_grid": {
+                "max_depth": [2, 3, 4, 5],
+                "learning_rate": [0.02, 0.03, 0.05],
+                "min_child_weight": [15, 25, 40],
+                "subsample": [0.8],
+                "colsample_bytree": [0.8],
+                "reg_lambda": [0.5, 1.0, 3.0],
+            },
+            "cv_scheme": "5-fold GroupKFold on GAME_ID with inner 80/20 grouped early stopping",
+        },
         "train_make_rate": float(y_train.mean()),
         "test_make_rate": float(y_test.mean()),
         "train_rows": len(train_df),
