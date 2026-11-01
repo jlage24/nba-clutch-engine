@@ -32,8 +32,8 @@ DOCS_DIR = ROOT / "docs"
 MODELS_DIR = ROOT / "models"
 
 FEATURE_GROUPS = {
-    "location": ["LOC_X", "LOC_Y", "SHOT_DISTANCE_FT", "SHOT_ANGLE"],
-    "shot_type": ["ACTION_GROUP", "SHOT_VALUE"],
+    "location": ["LOC_X", "LOC_Y", "SHOT_DISTANCE_FT", "SHOT_ANGLE", "LOC_PLACEHOLDER"],
+    "shot_type": ["ACTION_GROUP", "SHOT_VALUE", "IS_PUTBACK"],
     "game_context": ["TIME_REMAINING_SEC", "SCORE_MARGIN", "IS_OT", "IS_HOME"],
 }
 

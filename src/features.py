@@ -19,6 +19,7 @@ ID_COLS = ["GAME_ID", "GAME_EVENT_ID", "PLAYER_ID", "PLAYER_NAME", "TEAM_ID", "S
 NUMERIC = [
     "TIME_REMAINING_SEC", "SCORE_MARGIN", "SHOT_DISTANCE_FT", "SHOT_ANGLE",
     "LOC_X", "LOC_Y", "SHOT_VALUE", "IS_OT", "IS_HOME", "IS_PLAYOFFS",
+    "LOC_PLACEHOLDER", "IS_PUTBACK",
 ]
 CATEGORICAL = ["ACTION_GROUP"]
 FEATURES = NUMERIC + CATEGORICAL
@@ -153,6 +154,24 @@ def build_features(df: Union[pd.DataFrame, dict, pd.Series]) -> pd.DataFrame:
             )
     else:
         df["ACTION_GROUP"] = pd.Categorical(df["ACTION_GROUP"], dtype=ACTION_DTYPE)
+
+    # Indicator for exact (0, 0) placeholder coordinate
+    if "LOC_PLACEHOLDER" not in df.columns:
+        if "LOC_X" in df.columns and "LOC_Y" in df.columns:
+            df["LOC_PLACEHOLDER"] = ((df["LOC_X"] == 0) & (df["LOC_Y"] == 0)).astype(int)
+        else:
+            df["LOC_PLACEHOLDER"] = 0
+    else:
+        df["LOC_PLACEHOLDER"] = df["LOC_PLACEHOLDER"].astype(int)
+
+    # Putback / tip attempt indicator
+    if "IS_PUTBACK" not in df.columns:
+        if "ACTION_TYPE" in df.columns:
+            df["IS_PUTBACK"] = df["ACTION_TYPE"].astype(str).str.contains("tip|putback", case=False, na=False).astype(int)
+        else:
+            df["IS_PUTBACK"] = 0
+    else:
+        df["IS_PUTBACK"] = df["IS_PUTBACK"].astype(int)
 
     # Ensure required numeric columns are cast
     for col in NUMERIC:

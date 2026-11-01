@@ -2,53 +2,63 @@
   "ranked_features": [
     {
       "feature": "SHOT_DISTANCE_FT",
-      "mean_abs_shap": 0.3731572926044464,
-      "pct_importance": 48.7404670715332
+      "mean_abs_shap": 0.32910385727882385,
+      "pct_importance": 42.780784606933594
     },
     {
       "feature": "ACTION_GROUP",
-      "mean_abs_shap": 0.15163756906986237,
-      "pct_importance": 19.806354522705078
-    },
-    {
-      "feature": "TIME_REMAINING_SEC",
-      "mean_abs_shap": 0.05611907318234444,
-      "pct_importance": 7.330071926116943
+      "mean_abs_shap": 0.15150435268878937,
+      "pct_importance": 19.694313049316406
     },
     {
       "feature": "LOC_Y",
-      "mean_abs_shap": 0.052413661032915115,
-      "pct_importance": 6.8460845947265625
+      "mean_abs_shap": 0.06510046124458313,
+      "pct_importance": 8.462522506713867
+    },
+    {
+      "feature": "TIME_REMAINING_SEC",
+      "mean_abs_shap": 0.054044079035520554,
+      "pct_importance": 7.0252838134765625
     },
     {
       "feature": "LOC_X",
-      "mean_abs_shap": 0.03177912160754204,
-      "pct_importance": 4.150875091552734
-    },
-    {
-      "feature": "SHOT_ANGLE",
-      "mean_abs_shap": 0.026051484048366547,
-      "pct_importance": 3.4027512073516846
-    },
-    {
-      "feature": "IS_OT",
-      "mean_abs_shap": 0.02170266956090927,
-      "pct_importance": 2.8347249031066895
-    },
-    {
-      "feature": "IS_HOME",
-      "mean_abs_shap": 0.019671352580189705,
-      "pct_importance": 2.569401502609253
-    },
-    {
-      "feature": "SCORE_MARGIN",
-      "mean_abs_shap": 0.01956167258322239,
-      "pct_importance": 2.5550754070281982
+      "mean_abs_shap": 0.0479230098426342,
+      "pct_importance": 6.22959566116333
     },
     {
       "feature": "SHOT_VALUE",
-      "mean_abs_shap": 0.013506674207746983,
-      "pct_importance": 1.7641934156417847
+      "mean_abs_shap": 0.03636100888252258,
+      "pct_importance": 4.726630687713623
+    },
+    {
+      "feature": "SHOT_ANGLE",
+      "mean_abs_shap": 0.019923241809010506,
+      "pct_importance": 2.5898568630218506
+    },
+    {
+      "feature": "SCORE_MARGIN",
+      "mean_abs_shap": 0.017618494108319283,
+      "pct_importance": 2.2902586460113525
+    },
+    {
+      "feature": "IS_OT",
+      "mean_abs_shap": 0.016960319131612778,
+      "pct_importance": 2.2047014236450195
+    },
+    {
+      "feature": "IS_PUTBACK",
+      "mean_abs_shap": 0.01690255105495453,
+      "pct_importance": 2.1971919536590576
+    },
+    {
+      "feature": "IS_HOME",
+      "mean_abs_shap": 0.013341653160750866,
+      "pct_importance": 1.734304666519165
+    },
+    {
+      "feature": "LOC_PLACEHOLDER",
+      "mean_abs_shap": 0.000496638473123312,
+      "pct_importance": 0.06455889344215393
     },
     {
       "feature": "IS_PLAYOFFS",
@@ -59,28 +69,30 @@
   "grouped_features": [
     {
       "group": "location",
-      "mean_abs_shap": 0.4834015592932701,
-      "pct_importance": 63.14017868041992,
+      "mean_abs_shap": 0.462547208648175,
+      "pct_importance": 60.12731170654297,
       "features": [
         "LOC_X",
         "LOC_Y",
         "SHOT_DISTANCE_FT",
-        "SHOT_ANGLE"
+        "SHOT_ANGLE",
+        "LOC_PLACEHOLDER"
       ]
     },
     {
       "group": "shot_type",
-      "mean_abs_shap": 0.16514424327760935,
-      "pct_importance": 21.57054901123047,
+      "mean_abs_shap": 0.20476791262626648,
+      "pct_importance": 26.618135452270508,
       "features": [
         "ACTION_GROUP",
-        "SHOT_VALUE"
+        "SHOT_VALUE",
+        "IS_PUTBACK"
       ]
     },
     {
       "group": "game_context",
-      "mean_abs_shap": 0.1170547679066658,
-      "pct_importance": 15.289274215698242,
+      "mean_abs_shap": 0.10196454543620348,
+      "pct_importance": 13.254547119140625,
       "features": [
         "TIME_REMAINING_SEC",
         "SCORE_MARGIN",
@@ -99,29 +111,29 @@
   ],
   "domain_audits": {
     "is_home": {
-      "mean_abs_shap": 0.019671352580189705,
-      "rank": 8,
+      "mean_abs_shap": 0.013341653160750866,
+      "rank": 11,
       "empirical_home_fg": 0.45398428731762064,
       "empirical_away_fg": 0.4209039548022599,
       "fg_diff": 0.033080332515360744,
       "verdict": "Ablation finding: In 5-fold grouped CV ablation, adding IS_HOME produces no detectable difference in Brier score (+0.00001, 95% CI [-0.00031, +0.00032], p=0.940) or log loss (-0.00008, p=0.832). While raw home FG% is 3.3% higher league-wide, it provides no detectable out-of-fold generalization gain at this sample size and could be dropped without performance loss."
     },
     "location_collinearity": {
-      "loc_total_importance": 0.4834015592932701,
-      "pct_of_total": 63.14017868041992,
-      "verdict": "Collinearity note: LOC_X, LOC_Y, SHOT_DISTANCE_FT, and SHOT_ANGLE are geometrically collinear. Individual SHAP shares inside this group are largely arbitrary due to tree split competition; only the group total (0.4834, 63.1% of total mean |SHAP|) is physically meaningful."
+      "loc_total_importance": 0.4620505701750517,
+      "pct_of_total": 60.062747955322266,
+      "verdict": "Collinearity note: LOC_X, LOC_Y, SHOT_DISTANCE_FT, and SHOT_ANGLE are geometrically collinear. Individual SHAP shares inside this group are largely arbitrary due to tree split competition; only the group total (0.4621, 60.1% of total mean |SHAP|) is physically meaningful."
     },
     "score_margin": {
-      "mean_abs_shap": 0.01956167258322239,
-      "rank": 9,
+      "mean_abs_shap": 0.017618494108319283,
+      "rank": 8,
       "verdict": "SCORE_MARGIN ranks 9th of 11 features (2.56% of total mean |SHAP|). The apparent step between -3 and -2 reflects conditional vs marginal effects (trailing teams take 46.1% threes vs 37.7% for leading teams) combined with tree partition noise at small sample sizes, rather than a true structural jump in shot making."
     },
     "time_remaining": {
-      "mean_abs_shap": 0.05611907318234444,
-      "rank": 3,
+      "mean_abs_shap": 0.054044079035520554,
+      "rank": 4,
       "empirical_last_30s_fg": 0.40189873417721517,
       "empirical_over_60s_fg": 0.45720637273064096,
-      "verdict": "TIME_REMAINING_SEC ranks 3rd overall (0.0561). In the data, raw FG% drops from 45.7% (60-180s) to 40.2% in the final 30 seconds. Without tracking or defender data, we report this drop factually without asserting causal mechanisms like defensive pressure; part of the effect may reflect shot-mix composition."
+      "verdict": "TIME_REMAINING_SEC ranks 3rd overall (0.0540). In the data, raw FG% drops from 45.7% (60-180s) to 40.2% in the final 30 seconds. Without tracking or defender data, we report this drop factually without asserting causal mechanisms like defensive pressure; part of the effect may reflect shot-mix composition."
     }
   },
   "plot_paths": {

@@ -84,7 +84,14 @@ def predict_make_probability(
     is_single = isinstance(shot, dict)
 
     # Transform input through feature pipeline
-    feats_df = build_features(shot)
+    # Default LOC_PLACEHOLDER to 0 for user-specified shots unless explicitly provided
+    if is_single:
+        shot_data = dict(shot)
+        shot_data.setdefault("LOC_PLACEHOLDER", 0)
+        feats_df = build_features(shot_data)
+    else:
+        feats_df = build_features(shot)
+
     X = feats_df[features]
 
     # Predict raw probability P(make = 1)
@@ -119,7 +126,12 @@ def expected_points(
     Returns:
         float if single dict was passed; numpy array of floats if DataFrame was passed.
     """
-    feats_df = build_features(shot)
+    if isinstance(shot, dict):
+        shot_data = dict(shot)
+        shot_data.setdefault("LOC_PLACEHOLDER", 0)
+        feats_df = build_features(shot_data)
+    else:
+        feats_df = build_features(shot)
     shot_values = feats_df["SHOT_VALUE"].values.astype(float)
 
     probs = predict_make_probability(shot, calibrated=calibrated, models_dir=models_dir)
@@ -152,7 +164,7 @@ def demo_clutch_scenarios() -> None:
             },
         },
         {
-            "name": "Rim Attack: Contested Layup",
+            "name": "Rim Attack: Layup",
             "shot": {
                 "LOC_X": 10.0,
                 "LOC_Y": 15.0,

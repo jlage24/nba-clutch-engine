@@ -13,9 +13,11 @@ def test_load_artifacts():
     model, platt_params, features = load_artifacts()
     assert model is not None
     assert isinstance(features, list)
-    assert len(features) == 11
+    assert len(features) == 13
     assert "SHOT_DISTANCE_FT" in features
     assert "ACTION_GROUP" in features
+    assert "LOC_PLACEHOLDER" in features
+    assert "IS_PUTBACK" in features
     if platt_params is not None:
         assert "coef" in platt_params
         assert "intercept" in platt_params

@@ -156,7 +156,8 @@ def build_logistic_plus_features(df: pd.DataFrame) -> pd.DataFrame:
 def build_logistic_pp_features(df: pd.DataFrame) -> pd.DataFrame:
     """Build fair baseline features for Logistic++.
 
-    Includes all Logistic+ features plus one-hot ACTION_GROUP, IS_OT, and IS_HOME.
+    Includes all Logistic+ features plus one-hot ACTION_GROUP, IS_OT, IS_HOME,
+    LOC_PLACEHOLDER, and IS_PUTBACK.
     Guarantees fixed dummy categories across splits.
     """
     X = build_logistic_plus_features(df).copy()
@@ -164,6 +165,8 @@ def build_logistic_pp_features(df: pd.DataFrame) -> pd.DataFrame:
     X = pd.concat([X, action_dummies], axis=1)
     X["is_ot"] = df["IS_OT"].values.astype(float)
     X["is_home"] = df["IS_HOME"].values.astype(float)
+    X["loc_placeholder"] = df["LOC_PLACEHOLDER"].values.astype(float)
+    X["is_putback"] = df["IS_PUTBACK"].values.astype(float)
     return X
 
 
@@ -615,9 +618,10 @@ def main():
             "ECE confidence intervals under resampling are omitted because ECE is biased upward under resampling.",
             "Early stopping for XGBoost performed using an inner grouped split (80/20 games) of each training fold, leaving the outer OOF fold untouched.",
             "Final model uses median optimal trees across folds (91 trees).",
-            "Logistic++ includes one-hot ACTION_GROUP, IS_OT, and IS_HOME, with zero-variance columns automatically excluded.",
+            "Logistic++ includes one-hot ACTION_GROUP, IS_OT, IS_HOME, LOC_PLACEHOLDER, and IS_PUTBACK, with zero-variance columns automatically excluded.",
             "No detectable difference was detected between XGBoost and Logistic++ in Brier score or log loss at this sample size (test CI for Brier difference: [-0.0046, +0.0012], p=0.324; log loss difference: [-0.0113, +0.0027], p=0.276). The AUC p=0.020 is one of three uncorrected comparisons and is weak evidence.",
             "Uncalibrated XGBoost is maintained as the production default and Logistic++ as the interpretable reference.",
+            "SHAP importance of TIME_REMAINING_SEC (rank 3) is not matched by any predictive gain in the grouped CV ablation (+0.00006 Brier diff, p=0.868); this discrepancy matters because it demonstrates that tree-based feature attribution reflects credit-sharing across correlated features rather than incremental predictive necessity or causal impact.",
         ],
         "train_make_rate": float(y_train.mean()),
         "test_make_rate": float(y_test.mean()),

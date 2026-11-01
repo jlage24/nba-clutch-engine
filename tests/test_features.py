@@ -172,3 +172,46 @@ def test_split_grouped_no_leakage():
     test_games = set(test["GAME_ID"])
     assert len(train_games.intersection(test_games)) == 0
     assert len(train) + len(test) == len(df)
+
+
+def test_loc_placeholder_and_is_putback():
+    """Verify LOC_PLACEHOLDER and IS_PUTBACK indicators."""
+    df = pd.DataFrame([
+        # Exact (0,0) tip layup
+        {
+            "LOC_X": 0.0, "LOC_Y": 0.0, "SCORE_MARGIN": 0, "MINUTES_REMAINING": 1,
+            "SECONDS_REMAINING": 0, "PERIOD": 4, "SHOT_TYPE": "2PT Field Goal",
+            "ACTION_TYPE": "Tip Layup Shot",
+        },
+        # Exact (0,0) putback dunk
+        {
+            "LOC_X": 0.0, "LOC_Y": 0.0, "SCORE_MARGIN": 0, "MINUTES_REMAINING": 1,
+            "SECONDS_REMAINING": 0, "PERIOD": 4, "SHOT_TYPE": "2PT Field Goal",
+            "ACTION_TYPE": "Putback Dunk Shot",
+        },
+        # Normal driving layup near rim (0, 10)
+        {
+            "LOC_X": 0.0, "LOC_Y": 10.0, "SCORE_MARGIN": 0, "MINUTES_REMAINING": 1,
+            "SECONDS_REMAINING": 0, "PERIOD": 4, "SHOT_TYPE": "2PT Field Goal",
+            "ACTION_TYPE": "Driving Layup Shot",
+        },
+        # Standard jump shot
+        {
+            "LOC_X": 150.0, "LOC_Y": 150.0, "SCORE_MARGIN": 0, "MINUTES_REMAINING": 1,
+            "SECONDS_REMAINING": 0, "PERIOD": 4, "SHOT_TYPE": "2PT Field Goal",
+            "ACTION_TYPE": "Jump Shot",
+        },
+    ])
+    feats = build_features(df)
+
+    assert feats.loc[0, "LOC_PLACEHOLDER"] == 1
+    assert feats.loc[0, "IS_PUTBACK"] == 1
+
+    assert feats.loc[1, "LOC_PLACEHOLDER"] == 1
+    assert feats.loc[1, "IS_PUTBACK"] == 1
+
+    assert feats.loc[2, "LOC_PLACEHOLDER"] == 0
+    assert feats.loc[2, "IS_PUTBACK"] == 0
+
+    assert feats.loc[3, "LOC_PLACEHOLDER"] == 0
+    assert feats.loc[3, "IS_PUTBACK"] == 0

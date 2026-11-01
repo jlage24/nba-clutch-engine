@@ -8,9 +8,10 @@
     "ECE confidence intervals under resampling are omitted because ECE is biased upward under resampling.",
     "Early stopping for XGBoost performed using an inner grouped split (80/20 games) of each training fold, leaving the outer OOF fold untouched.",
     "Final model uses median optimal trees across folds (91 trees).",
-    "Logistic++ includes one-hot ACTION_GROUP, IS_OT, and IS_HOME, with zero-variance columns automatically excluded.",
+    "Logistic++ includes one-hot ACTION_GROUP, IS_OT, IS_HOME, LOC_PLACEHOLDER, and IS_PUTBACK, with zero-variance columns automatically excluded.",
     "No detectable difference was detected between XGBoost and Logistic++ in Brier score or log loss at this sample size (test CI for Brier difference: [-0.0046, +0.0012], p=0.324; log loss difference: [-0.0113, +0.0027], p=0.276). The AUC p=0.020 is one of three uncorrected comparisons and is weak evidence.",
-    "Uncalibrated XGBoost is maintained as the production default and Logistic++ as the interpretable reference."
+    "Uncalibrated XGBoost is maintained as the production default and Logistic++ as the interpretable reference.",
+    "SHAP importance of TIME_REMAINING_SEC (rank 3) is not matched by any predictive gain in the grouped CV ablation (+0.00006 Brier diff, p=0.868); this discrepancy matters because it demonstrates that tree-based feature attribution reflects credit-sharing across correlated features rather than incremental predictive necessity or causal impact."
   ],
   "train_make_rate": 0.4376576576576577,
   "test_make_rate": 0.4369369369369369,
@@ -18,10 +19,10 @@
   "test_rows": 1554,
   "optimal_trees_per_fold": [
     91,
-    80,
-    110,
-    151,
-    78
+    124,
+    88,
+    108,
+    66
   ],
   "final_n_estimators": 91,
   "best_hyperparameters": {
@@ -30,7 +31,7 @@
     "min_child_weight": 25,
     "subsample": 0.8,
     "colsample_bytree": 0.8,
-    "reg_lambda": 1.0
+    "reg_lambda": 3.0
   },
   "top_5_configurations": [
     {
@@ -41,10 +42,10 @@
         "min_child_weight": 25,
         "subsample": 0.8,
         "colsample_bytree": 0.8,
-        "reg_lambda": 1.0
+        "reg_lambda": 3.0
       },
-      "log_loss": 0.6279410397184294,
-      "brier": 0.21972765620464874
+      "log_loss": 0.6279944258351896,
+      "brier": 0.21972944762563398
     },
     {
       "rank": 2,
@@ -54,10 +55,10 @@
         "min_child_weight": 25,
         "subsample": 0.8,
         "colsample_bytree": 0.8,
-        "reg_lambda": 3.0
+        "reg_lambda": 1.0
       },
-      "log_loss": 0.6279881231371471,
-      "brier": 0.2197046989673168
+      "log_loss": 0.628021057624923,
+      "brier": 0.21974918040581898
     },
     {
       "rank": 3,
@@ -67,56 +68,56 @@
         "min_child_weight": 15,
         "subsample": 0.8,
         "colsample_bytree": 0.8,
-        "reg_lambda": 0.5
+        "reg_lambda": 1.0
       },
-      "log_loss": 0.6280613492530445,
-      "brier": 0.21980810977366524
+      "log_loss": 0.6281020940257634,
+      "brier": 0.21981981901320785
     },
     {
       "rank": 4,
       "config": {
-        "max_depth": 3,
+        "max_depth": 4,
+        "learning_rate": 0.03,
+        "min_child_weight": 15,
+        "subsample": 0.8,
+        "colsample_bytree": 0.8,
+        "reg_lambda": 0.5
+      },
+      "log_loss": 0.6281502280341447,
+      "brier": 0.21987024160900268
+    },
+    {
+      "rank": 5,
+      "config": {
+        "max_depth": 4,
         "learning_rate": 0.03,
         "min_child_weight": 25,
         "subsample": 0.8,
         "colsample_bytree": 0.8,
         "reg_lambda": 0.5
       },
-      "log_loss": 0.6281812954321265,
-      "brier": 0.21977527953462175
-    },
-    {
-      "rank": 5,
-      "config": {
-        "max_depth": 3,
-        "learning_rate": 0.03,
-        "min_child_weight": 25,
-        "subsample": 0.8,
-        "colsample_bytree": 0.8,
-        "reg_lambda": 3.0
-      },
-      "log_loss": 0.6281950891034427,
-      "brier": 0.21974412526648074
+      "log_loss": 0.6281618184837001,
+      "brier": 0.21981925894230547
     }
   ],
   "nested_cv_calibrator_comparison": {
     "Platt (Nested CV)": {
-      "brier": 0.22004914124001204,
-      "log_loss": 0.6287698739440256,
-      "roc_auc": 0.6706240636841836,
-      "ece": 0.016932347721298736
+      "brier": 0.22013559115470466,
+      "log_loss": 0.6291010850211349,
+      "roc_auc": 0.6694666167342201,
+      "ece": 0.013456284925004253
     },
     "Isotonic (Nested CV)": {
-      "brier": 0.2206364202158077,
-      "log_loss": 0.652343004643182,
-      "roc_auc": 0.6662286145368584,
-      "ece": 0.014642732616305934
+      "brier": 0.2210833009436137,
+      "log_loss": 0.6369594897239894,
+      "roc_auc": 0.6620324818567274,
+      "ece": 0.017776508640681542
     }
   },
   "chosen_calibrator": "Platt",
   "platt_parameters": {
-    "coef": 1.084403795567179,
-    "intercept": 0.02589107666652107
+    "coef": 1.112732872941801,
+    "intercept": 0.03538137486792257
   },
   "default_model": "XGBoost (Uncalibrated)",
   "oof_headline_metrics": {
@@ -200,25 +201,25 @@
     },
     "Logistic Regression (Logistic++)": {
       "brier": {
-        "point": 0.22167344472447406,
-        "ci_lower": 0.21770157366323292,
-        "ci_upper": 0.22561322123533673,
-        "std_err": 0.001988392596265143
+        "point": 0.2211637186004176,
+        "ci_lower": 0.21719398655318273,
+        "ci_upper": 0.2249613706409763,
+        "std_err": 0.0019620127153930377
       },
       "log_loss": {
-        "point": 0.6322404989059809,
-        "ci_lower": 0.6234681197788298,
-        "ci_upper": 0.6412571264237169,
-        "std_err": 0.004417692357303987
+        "point": 0.6311224602322242,
+        "ci_lower": 0.6220542325609038,
+        "ci_upper": 0.6396599616931619,
+        "std_err": 0.0043593151600175226
       },
       "roc_auc": {
-        "point": 0.6659418415390554,
-        "ci_lower": 0.6501274240905525,
-        "ci_upper": 0.6802619413744794,
-        "std_err": 0.007564071324553079
+        "point": 0.6665913678689455,
+        "ci_lower": 0.6506880554885588,
+        "ci_upper": 0.6809561128706656,
+        "std_err": 0.007447696396693169
       },
       "ece": {
-        "point": 0.020443638974561064,
+        "point": 0.011795108237013163,
         "ci_lower": NaN,
         "ci_upper": NaN,
         "std_err": NaN
@@ -226,25 +227,25 @@
     },
     "XGBoost (Uncalibrated, Default)": {
       "brier": {
-        "point": 0.2198686086680077,
-        "ci_lower": 0.21624924226444595,
-        "ci_upper": 0.2238286552307382,
-        "std_err": 0.0019028987505681349
+        "point": 0.22002380240942285,
+        "ci_lower": 0.21649688932276362,
+        "ci_upper": 0.22375466675487302,
+        "std_err": 0.0018869222828335355
       },
       "log_loss": {
-        "point": 0.6286332593304661,
-        "ci_lower": 0.6207180047602385,
-        "ci_upper": 0.6369707752415694,
-        "std_err": 0.004087022966098773
+        "point": 0.6291855886281917,
+        "ci_lower": 0.6215060639463985,
+        "ci_upper": 0.6373707601942231,
+        "std_err": 0.004052841724701084
       },
       "roc_auc": {
-        "point": 0.6715709158360825,
-        "ci_lower": 0.6567497430517408,
-        "ci_upper": 0.6857558588802235,
-        "std_err": 0.007397070965078192
+        "point": 0.670622810536309,
+        "ci_lower": 0.655578884939737,
+        "ci_upper": 0.6845634666163881,
+        "std_err": 0.0074602393210574415
       },
       "ece": {
-        "point": 0.013563212728178183,
+        "point": 0.0144204967811301,
         "ci_lower": NaN,
         "ci_upper": NaN,
         "std_err": NaN
@@ -252,25 +253,25 @@
     },
     "XGBoost (Calibrated)": {
       "brier": {
-        "point": 0.21984899094925067,
-        "ci_lower": 0.21607338672982482,
-        "ci_upper": 0.22394264431968702,
-        "std_err": 0.002002925122197667
+        "point": 0.21994987736149219,
+        "ci_lower": 0.21619633748481557,
+        "ci_upper": 0.223978493497841,
+        "std_err": 0.0020182825696271737
       },
       "log_loss": {
-        "point": 0.6283403206754521,
-        "ci_lower": 0.6199644822186287,
-        "ci_upper": 0.6371160751948489,
-        "std_err": 0.0043445109253263114
+        "point": 0.6286933185892297,
+        "ci_lower": 0.6203948510070603,
+        "ci_upper": 0.6376476463615914,
+        "std_err": 0.004392022418139467
       },
       "roc_auc": {
-        "point": 0.6715709158360825,
-        "ci_lower": 0.6567497430517408,
-        "ci_upper": 0.6857558588802235,
-        "std_err": 0.007397070965078192
+        "point": 0.670622810536309,
+        "ci_lower": 0.655578884939737,
+        "ci_upper": 0.6845634666163881,
+        "std_err": 0.0074602393210574415
       },
       "ece": {
-        "point": 0.012388440674804898,
+        "point": 0.01248199364414966,
         "ci_lower": NaN,
         "ci_upper": NaN,
         "std_err": NaN
@@ -358,25 +359,25 @@
     },
     "Logistic Regression (Logistic++)": {
       "brier": {
-        "point": 0.22581951851668228,
-        "ci_lower": 0.21830752724395228,
-        "ci_upper": 0.23295677364126602,
-        "std_err": 0.003995688552418626
+        "point": 0.2262752289217074,
+        "ci_lower": 0.21850957113870556,
+        "ci_upper": 0.2336949826271289,
+        "std_err": 0.00408279821576657
       },
       "log_loss": {
-        "point": 0.643038955640453,
-        "ci_lower": 0.6251184066385382,
-        "ci_upper": 0.6600320187046993,
-        "std_err": 0.00920133280828368
+        "point": 0.6444072541172073,
+        "ci_lower": 0.6255869940891299,
+        "ci_upper": 0.6622373100672501,
+        "std_err": 0.009491309502934754
       },
       "roc_auc": {
-        "point": 0.6521237113402062,
-        "ci_lower": 0.627264527403443,
-        "ci_upper": 0.6788923217463106,
-        "std_err": 0.013769804742991663
+        "point": 0.6508428361035136,
+        "ci_lower": 0.6258583603880054,
+        "ci_upper": 0.6770227620995242,
+        "std_err": 0.013740447047711503
       },
       "ece": {
-        "point": 0.03313265531733444,
+        "point": 0.031326163376481746,
         "ci_lower": NaN,
         "ci_upper": NaN,
         "std_err": NaN
@@ -384,25 +385,25 @@
     },
     "XGBoost (Uncalibrated, Default)": {
       "brier": {
-        "point": 0.2244254504376727,
-        "ci_lower": 0.2166705221390934,
-        "ci_upper": 0.23092305284340855,
-        "std_err": 0.003828818688742994
+        "point": 0.22383962811417765,
+        "ci_lower": 0.2162467946182327,
+        "ci_upper": 0.23031425246539533,
+        "std_err": 0.0037666863333456137
       },
       "log_loss": {
-        "point": 0.639455912373518,
-        "ci_lower": 0.622445980371743,
-        "ci_upper": 0.654251975416559,
-        "std_err": 0.008519296808268262
+        "point": 0.6379865820132979,
+        "ci_lower": 0.6211079345149393,
+        "ci_upper": 0.6522172540559634,
+        "std_err": 0.008338564737904165
       },
       "roc_auc": {
-        "point": 0.6634950557542605,
-        "ci_lower": 0.6398310566623182,
-        "ci_upper": 0.6904030126203313,
-        "std_err": 0.01354303321191053
+        "point": 0.6647818220071534,
+        "ci_lower": 0.6406450323896976,
+        "ci_upper": 0.6913452596660964,
+        "std_err": 0.013585912979218425
       },
       "ece": {
-        "point": 0.03659238961634334,
+        "point": 0.026507875470964767,
         "ci_lower": NaN,
         "ci_upper": NaN,
         "std_err": NaN
@@ -410,25 +411,25 @@
     },
     "XGBoost (Calibrated)": {
       "brier": {
-        "point": 0.22478676251115257,
-        "ci_lower": 0.21659992055645788,
-        "ci_upper": 0.23164671232941736,
-        "std_err": 0.004038426695879013
+        "point": 0.22427528554263748,
+        "ci_lower": 0.21617372922382133,
+        "ci_upper": 0.23116031562955366,
+        "std_err": 0.0040368830483848255
       },
       "log_loss": {
-        "point": 0.6404427424679351,
-        "ci_lower": 0.6222025700431805,
-        "ci_upper": 0.6563746814609872,
-        "std_err": 0.009134672805584294
+        "point": 0.6391119732989001,
+        "ci_lower": 0.6205528686206336,
+        "ci_upper": 0.6549149071164001,
+        "std_err": 0.009126270529240484
       },
       "roc_auc": {
-        "point": 0.6634950557542605,
-        "ci_lower": 0.6398310566623182,
-        "ci_upper": 0.6904030126203313,
-        "std_err": 0.01354303321191053
+        "point": 0.6647818220071534,
+        "ci_lower": 0.6406450323896976,
+        "ci_upper": 0.6913452596660964,
+        "std_err": 0.013585912979218425
       },
       "ece": {
-        "point": 0.040462179934266845,
+        "point": 0.031631926311281144,
         "ci_lower": NaN,
         "ci_upper": NaN,
         "std_err": NaN
@@ -437,152 +438,152 @@
   },
   "paired_diff_vs_constant": {
     "brier": {
-      "point_diff": -0.02159811907778872,
-      "ci_lower": -0.028677619109601832,
-      "ci_upper": -0.015281778071504472,
-      "std_err": 0.00351644056868608,
+      "point_diff": -0.02218394140128377,
+      "ci_lower": -0.028988425899047824,
+      "ci_upper": -0.015887385589532038,
+      "std_err": 0.0034413539231800782,
       "p_value": 0.0
     },
     "log_loss": {
-      "point_diff": -0.04571720023606951,
-      "ci_lower": -0.06133936763266598,
-      "ci_upper": -0.0314186253383953,
-      "std_err": 0.00794666076685307,
+      "point_diff": -0.04718653059628952,
+      "ci_lower": -0.061999270666012,
+      "ci_upper": -0.033426576684905084,
+      "std_err": 0.007733587826157429,
       "p_value": 0.0
     },
     "roc_auc": {
-      "point_diff": 0.1634950557542605,
-      "ci_lower": 0.1398310566623182,
-      "ci_upper": 0.19040301262033127,
-      "std_err": 0.013543033211910529,
+      "point_diff": 0.1647818220071534,
+      "ci_lower": 0.14064503238969756,
+      "ci_upper": 0.1913452596660964,
+      "std_err": 0.013585912979218427,
       "p_value": 0.0
     },
     "ece": {
-      "point_diff": 0.03587166889562246,
-      "ci_lower": 0.01419327058415509,
-      "ci_upper": 0.05686897920307074,
-      "std_err": 0.010834694420443113,
+      "point_diff": 0.025787154750243887,
+      "ci_lower": 0.011963722864264222,
+      "ci_upper": 0.05562906523510596,
+      "std_err": 0.010743060332490142,
       "p_value": 0.0
     }
   },
   "paired_diff_vs_logistic_simple": {
     "brier": {
-      "point_diff": -0.009217390562316269,
-      "ci_lower": -0.013006282597509994,
-      "ci_upper": -0.005129434484137859,
-      "std_err": 0.0021205957657174034,
+      "point_diff": -0.009803212885811319,
+      "ci_lower": -0.013436910494243637,
+      "ci_upper": -0.005597688476110865,
+      "std_err": 0.0021333321185048044,
       "p_value": 0.0
     },
     "log_loss": {
-      "point_diff": -0.020555405543750793,
-      "ci_lower": -0.029491866399462115,
-      "ci_upper": -0.010154615453134569,
-      "std_err": 0.00503762541257119,
+      "point_diff": -0.022024735903970805,
+      "ci_lower": -0.03084519261619915,
+      "ci_upper": -0.01166662266501258,
+      "std_err": 0.0050077385422632155,
       "p_value": 0.0
     },
     "roc_auc": {
-      "point_diff": 0.02789648642962339,
-      "ci_lower": 0.016425414440882923,
-      "ci_upper": 0.04063151365761592,
-      "std_err": 0.006323585129477591,
+      "point_diff": 0.029183252682516314,
+      "ci_lower": 0.017679838248958978,
+      "ci_upper": 0.041604515223139696,
+      "std_err": 0.006196535237615772,
       "p_value": 0.0
     },
     "ece": {
-      "point_diff": -0.009603682615510756,
-      "ci_lower": -0.03952221493373419,
-      "ci_upper": 0.014646472743220104,
-      "std_err": 0.013982571014504121,
-      "p_value": 0.404
+      "point_diff": -0.01968819676088933,
+      "ci_lower": -0.03943968791472509,
+      "ci_upper": 0.012028654532705513,
+      "std_err": 0.013265177103039611,
+      "p_value": 0.312
     }
   },
   "paired_diff_vs_logistic_plus": {
     "brier": {
-      "point_diff": -0.008357028906874425,
-      "ci_lower": -0.011975867392974697,
-      "ci_upper": -0.00443657678159833,
-      "std_err": 0.001921038955256438,
+      "point_diff": -0.008942851230369475,
+      "ci_lower": -0.01256654901691668,
+      "ci_upper": -0.004795240406767204,
+      "std_err": 0.001935070113119318,
       "p_value": 0.0
     },
     "log_loss": {
-      "point_diff": -0.0192531371123027,
-      "ci_lower": -0.028272349712589063,
-      "ci_upper": -0.009188139083985582,
-      "std_err": 0.00486898089500133,
+      "point_diff": -0.02072246747252271,
+      "ci_lower": -0.029707895561825674,
+      "ci_upper": -0.010505571648795193,
+      "std_err": 0.00483443285299645,
       "p_value": 0.0
     },
     "roc_auc": {
-      "point_diff": 0.025779086892488978,
-      "ci_lower": 0.016512929184560394,
-      "ci_upper": 0.03697051095388982,
-      "std_err": 0.0052329440019692666,
+      "point_diff": 0.027065853145381902,
+      "ci_lower": 0.01832116887964598,
+      "ci_upper": 0.03786146795003354,
+      "std_err": 0.005034577236413081,
       "p_value": 0.0
     },
     "ece": {
-      "point_diff": -0.004270697136288415,
-      "ci_lower": -0.04088051325592428,
-      "ci_upper": 0.014159588767323771,
-      "std_err": 0.01373443337508227,
-      "p_value": 0.364
+      "point_diff": -0.014355211281666988,
+      "ci_lower": -0.04046724841310022,
+      "ci_upper": 0.009905582937883727,
+      "std_err": 0.012970729892400352,
+      "p_value": 0.252
     }
   },
   "paired_diff_vs_logistic_pp": {
     "brier": {
-      "point_diff": -0.001394068079009575,
-      "ci_lower": -0.004630837633352895,
-      "ci_upper": 0.001192525225592249,
-      "std_err": 0.0014915004474974453,
-      "p_value": 0.324
+      "point_diff": -0.0024356008075297475,
+      "ci_lower": -0.005798511113091227,
+      "ci_upper": 4.19634834622601e-05,
+      "std_err": 0.0014987604152486322,
+      "p_value": 0.06
     },
     "log_loss": {
-      "point_diff": -0.0035830432669350376,
-      "ci_lower": -0.011345668422035732,
-      "ci_upper": 0.0026595819758069308,
-      "std_err": 0.003564474404147686,
-      "p_value": 0.276
+      "point_diff": -0.006420672103909397,
+      "ci_lower": -0.015135529792306163,
+      "ci_upper": -0.0003843680573379988,
+      "std_err": 0.003745292277607425,
+      "p_value": 0.036
     },
     "roc_auc": {
-      "point_diff": 0.011371344414054296,
-      "ci_lower": 0.001985345023159277,
-      "ci_upper": 0.02251096472665777,
-      "std_err": 0.005690172767232555,
-      "p_value": 0.02
+      "point_diff": 0.013938985903639844,
+      "ci_lower": 0.0033376767267719407,
+      "ci_upper": 0.027084625531463822,
+      "std_err": 0.005964429624888688,
+      "p_value": 0.024
     },
     "ece": {
-      "point_diff": 0.0034597342990089,
-      "ci_lower": -0.021183910677253802,
-      "ci_upper": 0.023465540242539582,
-      "std_err": 0.011945981039105923,
-      "p_value": 0.928
+      "point_diff": -0.004818287905516978,
+      "ci_lower": -0.02419121531606633,
+      "ci_upper": 0.02067814167368656,
+      "std_err": 0.01186602290337306,
+      "p_value": 0.736
     }
   },
   "paired_diff_cal_vs_logistic_pp": {
     "brier": {
-      "point_diff": -0.0010327560055297114,
-      "ci_lower": -0.004435254715993838,
-      "ci_upper": 0.0015241594905306777,
-      "std_err": 0.001543093847723822,
-      "p_value": 0.46
+      "point_diff": -0.0019999433790699184,
+      "ci_lower": -0.005546653265528511,
+      "ci_upper": 0.0005885703186725842,
+      "std_err": 0.0015295786540173242,
+      "p_value": 0.132
     },
     "log_loss": {
-      "point_diff": -0.0025962131725179027,
-      "ci_lower": -0.010715868691532923,
-      "ci_upper": 0.003482193038904846,
-      "std_err": 0.003657590420042597,
-      "p_value": 0.444
+      "point_diff": -0.005295280818307213,
+      "ci_lower": -0.01371947160201351,
+      "ci_upper": 0.0008394053209585311,
+      "std_err": 0.00375094886643467,
+      "p_value": 0.092
     },
     "roc_auc": {
-      "point_diff": 0.011371344414054296,
-      "ci_lower": 0.001985345023159277,
-      "ci_upper": 0.02251096472665777,
-      "std_err": 0.005690172767232555,
-      "p_value": 0.02
+      "point_diff": 0.013938985903639844,
+      "ci_lower": 0.0033376767267719407,
+      "ci_upper": 0.027084625531463822,
+      "std_err": 0.005964429624888688,
+      "p_value": 0.024
     },
     "ece": {
-      "point_diff": 0.007329524616932405,
-      "ci_lower": -0.018264307893407487,
-      "ci_upper": 0.025083498849405153,
-      "std_err": 0.011878076511788108,
-      "p_value": 0.808
+      "point_diff": 0.0003057629347993987,
+      "ci_lower": -0.022477954411389257,
+      "ci_upper": 0.024933643118321084,
+      "std_err": 0.011985956851643621,
+      "p_value": 0.976
     }
   }
 }
