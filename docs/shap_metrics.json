@@ -1,0 +1,133 @@
+{
+  "ranked_features": [
+    {
+      "feature": "SHOT_DISTANCE_FT",
+      "mean_abs_shap": 0.3731572926044464,
+      "pct_importance": 48.7404670715332
+    },
+    {
+      "feature": "ACTION_GROUP",
+      "mean_abs_shap": 0.15163756906986237,
+      "pct_importance": 19.806354522705078
+    },
+    {
+      "feature": "TIME_REMAINING_SEC",
+      "mean_abs_shap": 0.05611907318234444,
+      "pct_importance": 7.330071926116943
+    },
+    {
+      "feature": "LOC_Y",
+      "mean_abs_shap": 0.052413661032915115,
+      "pct_importance": 6.8460845947265625
+    },
+    {
+      "feature": "LOC_X",
+      "mean_abs_shap": 0.03177912160754204,
+      "pct_importance": 4.150875091552734
+    },
+    {
+      "feature": "SHOT_ANGLE",
+      "mean_abs_shap": 0.026051484048366547,
+      "pct_importance": 3.4027512073516846
+    },
+    {
+      "feature": "IS_OT",
+      "mean_abs_shap": 0.02170266956090927,
+      "pct_importance": 2.8347249031066895
+    },
+    {
+      "feature": "IS_HOME",
+      "mean_abs_shap": 0.019671352580189705,
+      "pct_importance": 2.569401502609253
+    },
+    {
+      "feature": "SCORE_MARGIN",
+      "mean_abs_shap": 0.01956167258322239,
+      "pct_importance": 2.5550754070281982
+    },
+    {
+      "feature": "SHOT_VALUE",
+      "mean_abs_shap": 0.013506674207746983,
+      "pct_importance": 1.7641934156417847
+    },
+    {
+      "feature": "IS_PLAYOFFS",
+      "mean_abs_shap": 0.0,
+      "pct_importance": 0.0
+    }
+  ],
+  "grouped_features": [
+    {
+      "group": "location",
+      "mean_abs_shap": 0.4834015592932701,
+      "pct_importance": 63.14017868041992,
+      "features": [
+        "LOC_X",
+        "LOC_Y",
+        "SHOT_DISTANCE_FT",
+        "SHOT_ANGLE"
+      ]
+    },
+    {
+      "group": "shot_type",
+      "mean_abs_shap": 0.16514424327760935,
+      "pct_importance": 21.57054901123047,
+      "features": [
+        "ACTION_GROUP",
+        "SHOT_VALUE"
+      ]
+    },
+    {
+      "group": "game_context",
+      "mean_abs_shap": 0.1170547679066658,
+      "pct_importance": 15.289274215698242,
+      "features": [
+        "TIME_REMAINING_SEC",
+        "SCORE_MARGIN",
+        "IS_OT",
+        "IS_HOME"
+      ]
+    },
+    {
+      "group": "other",
+      "mean_abs_shap": 0.0,
+      "pct_importance": 0.0,
+      "features": [
+        "IS_PLAYOFFS"
+      ]
+    }
+  ],
+  "domain_audits": {
+    "is_home": {
+      "mean_abs_shap": 0.019671352580189705,
+      "rank": 8,
+      "empirical_home_fg": 0.45398428731762064,
+      "empirical_away_fg": 0.4209039548022599,
+      "fg_diff": 0.033080332515360744,
+      "verdict": "Pass: IS_HOME exhibits a modest, realistic importance (~2.6% of total) reflecting the empirical +3.3% home court shooting advantage, without dominating the model or overfitting noise."
+    },
+    "court_symmetry": {
+      "loc_x_importance": 0.03177912160754204,
+      "loc_y_importance": 0.052413661032915115,
+      "ratio_y_to_x": 1.6493111949474384,
+      "verdict": "Pass: Depth (LOC_Y: 0.0524) is 1.6x more important than lateral offset (LOC_X: 0.0318), consistent with basketball court physics and lateral symmetry."
+    },
+    "score_margin": {
+      "mean_abs_shap": 0.01956167258322239,
+      "rank": 9,
+      "verdict": "Pass: SCORE_MARGIN ranks 9th of 11 features (~2.6% of importance). Empirical clutch make rates show minimal direct variation with pre-shot score margin (trailing vs leading make rates differ by < 1%), so low marginal importance is strictly correct."
+    },
+    "time_pressure": {
+      "mean_abs_shap": 0.05611907318234444,
+      "rank": 3,
+      "empirical_last_30s_fg": 0.40189873417721517,
+      "empirical_over_60s_fg": 0.45720637273064096,
+      "verdict": "Pass: TIME_REMAINING_SEC is the #1 game context feature (rank 3 overall, 0.0561). It correctly captures the late-game efficiency drop (FG% drops from 45.7% to 40.2% in the final 30 seconds) driven by defensive pressure, clock burn, and hurried shots."
+    }
+  },
+  "plot_paths": {
+    "summary": "/home/jlage/jlage/Projetos/nba-clutch-engine/docs/shap_summary.png",
+    "distance": "/home/jlage/jlage/Projetos/nba-clutch-engine/docs/shap_dependence_distance.png",
+    "margin": "/home/jlage/jlage/Projetos/nba-clutch-engine/docs/shap_dependence_margin.png"
+  }
+}
