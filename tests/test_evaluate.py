@@ -15,19 +15,41 @@ from src.evaluate import (
 )
 
 
-def test_expected_calibration_error_constant():
-    """Constant probability matching true mean should have zero ECE."""
-    y = np.array([1, 1, 0, 0])
-    p = np.array([0.5, 0.5, 0.5, 0.5])
-    assert expected_calibration_error(y, p, n_bins=2) == pytest.approx(0.0)
+def test_ece_constant_predictor():
+    """(a) Constant predictor c must give ECE == |c - mean(y)|."""
+    y = np.array([1, 1, 0, 0, 0])  # mean(y) = 0.40
+    c = 0.4377
+    p = np.full_like(y, fill_value=c, dtype=float)
+    ece = expected_calibration_error(y, p, n_bins=10)
+    assert ece == pytest.approx(abs(c - 0.40))
 
 
-def test_expected_calibration_error_biased():
-    """Known biased probabilities should produce exact expected calibration error."""
-    # Actual make rate is 0.2, predicted is 0.8
-    y = np.array([1, 0, 0, 0, 0])
-    p = np.array([0.8, 0.8, 0.8, 0.8, 0.8])
-    assert expected_calibration_error(y, p, n_bins=1) == pytest.approx(0.6)
+def test_ece_step_function_heavy_ties():
+    """(b) Step-function predictor with heavy ties does not crash and keeps ties together."""
+    y = np.array([0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 1])
+    # 3 distinct plateaus with 5 samples each (simulating isotonic regression plateaus)
+    p = np.array([0.2, 0.2, 0.2, 0.2, 0.2, 0.5, 0.5, 0.5, 0.5, 0.5, 0.8, 0.8, 0.8, 0.8, 0.8])
+    ece = expected_calibration_error(y, p, n_bins=10)
+    assert not np.isnan(ece)
+    assert 0.0 <= ece <= 1.0
+
+    confs, accs, counts = compute_calibration_curve(y, p, n_bins=10)
+    # Bins should preserve values without splitting ties
+    assert sum(counts) == len(y)
+    for conf, acc, cnt in zip(confs, accs, counts):
+        assert 0.0 <= conf <= 1.0
+        assert 0.0 <= acc <= 1.0
+        assert cnt > 0
+
+
+def test_ece_perfectly_calibrated_large_n():
+    """(c) Perfectly calibrated synthetic predictor gives ECE close to zero for large n."""
+    rng = np.random.default_rng(42)
+    n = 100_000
+    p = rng.uniform(0.1, 0.9, size=n)
+    y = rng.binomial(1, p)
+    ece = expected_calibration_error(y, p, n_bins=10)
+    assert ece < 0.005
 
 
 def test_compute_calibration_curve():

@@ -32,8 +32,11 @@ def expected_calibration_error(
 ) -> float:
     """Compute Expected Calibration Error (ECE) using equal-frequency (quantile) bins.
 
-    Equal-frequency binning ensures each bin contains approximately equal statistical
-    power (~N / n_bins shots), preventing sparse bin artifacts in shot prediction.
+    Bins on values (not ranks) using quantiles as bin edges, ensuring that identical
+    probabilities (ties, such as from step functions or isotonic calibration) remain
+    in the same bin.
+
+    For constant predictors with a single unique value c, ECE evaluates to |c - mean(y)|.
     Formula:
         ECE = sum_{b=1}^B (|B_b| / N) * |acc(B_b) - conf(B_b)|
     """
@@ -43,17 +46,19 @@ def expected_calibration_error(
     if n == 0:
         return 0.0
 
-    try:
-        bins = pd.qcut(y_p, q=n_bins, duplicates="drop")
-    except (ValueError, IndexError):
-        # Fallback when predictions are degenerate / constant
+    quantiles = np.linspace(0, 1, n_bins + 1)
+    edges = np.unique(np.quantile(y_p, quantiles))
+    if len(edges) < 2:
         return float(abs(np.mean(y_t) - np.mean(y_p)))
 
+    bins = pd.cut(y_p, bins=edges, include_lowest=True)
     df = pd.DataFrame({"y": y_t, "p": y_p, "bin": bins})
     grouped = df.groupby("bin", observed=False)
     counts = grouped.size()
-    acc = grouped["y"].mean()
-    conf = grouped["p"].mean()
+    valid = counts > 0
+    counts = counts[valid].values
+    acc = grouped["y"].mean()[valid].values
+    conf = grouped["p"].mean()[valid].values
 
     ece = (np.abs(acc - conf) * (counts / n)).sum()
     return float(ece)
@@ -72,16 +77,19 @@ def compute_calibration_curve(
     y_t = np.asarray(y_true, dtype=float)
     y_p = np.clip(np.asarray(y_prob, dtype=float), 0.0, 1.0)
 
-    try:
-        bins = pd.qcut(y_p, q=n_bins, duplicates="drop")
-    except (ValueError, IndexError):
-        return np.array([np.mean(y_p)]), np.array([np.mean(y_t)]), np.array([len(y_t)])
+    quantiles = np.linspace(0, 1, n_bins + 1)
+    edges = np.unique(np.quantile(y_p, quantiles))
+    if len(edges) < 2:
+        return np.array([float(np.mean(y_p))]), np.array([float(np.mean(y_t))]), np.array([len(y_t)])
 
+    bins = pd.cut(y_p, bins=edges, include_lowest=True)
     df = pd.DataFrame({"y": y_t, "p": y_p, "bin": bins})
     grouped = df.groupby("bin", observed=False)
-    confs = grouped["p"].mean().values
-    accs = grouped["y"].mean().values
-    counts = grouped.size().values
+    counts = grouped.size()
+    valid = counts > 0
+    confs = grouped["p"].mean()[valid].values
+    accs = grouped["y"].mean()[valid].values
+    counts = counts[valid].values
     return confs, accs, counts
 
 
