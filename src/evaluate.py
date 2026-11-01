@@ -19,7 +19,28 @@ matplotlib.use("Agg")  # Headless backend for CPU/script execution
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from scipy.special import expit, logit
+from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import brier_score_loss, log_loss, roc_auc_score
+
+
+class PlattCalibrator:
+    """Platt scaling: logistic regression on the logit of predicted probabilities."""
+
+    def __init__(self, random_state: int = 42):
+        self.random_state = random_state
+        self.lr = LogisticRegression(random_state=random_state)
+
+    def fit(self, probs: np.ndarray, y: np.ndarray) -> "PlattCalibrator":
+        p_clipped = np.clip(probs, 1e-6, 1.0 - 1e-6)
+        logits = logit(p_clipped).reshape(-1, 1)
+        self.lr.fit(logits, y)
+        return self
+
+    def predict_proba(self, probs: np.ndarray) -> np.ndarray:
+        p_clipped = np.clip(probs, 1e-6, 1.0 - 1e-6)
+        logits = logit(p_clipped).reshape(-1, 1)
+        return self.lr.predict_proba(logits)[:, 1]
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DOCS_DIR = ROOT / "docs"
@@ -314,11 +335,12 @@ def plot_reliability(
             color=color, label=f"{name} (ECE={ece:.3f})", zorder=3
         )
 
-        # Plot marginal probability distribution
-        ax_hist.hist(
-            p_arr, bins=np.linspace(0, 1, 31),
-            alpha=0.35, color=color, density=True, label=name
-        )
+        # Plot marginal probability distribution (omit constant baseline to prevent y-axis distortion)
+        if "constant" not in name.lower():
+            ax_hist.hist(
+                p_arr, bins=np.linspace(0, 1, 31),
+                alpha=0.35, color=color, density=True, label=name
+            )
 
     ax_curve.set_title(title, fontsize=13, fontweight="bold", pad=12)
     ax_curve.set_ylabel("Observed FG% (Make Rate)", fontsize=11)

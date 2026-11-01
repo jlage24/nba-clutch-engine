@@ -146,18 +146,18 @@ def save_shap_plots(
     plt.close("all")
     plot_paths["summary"] = summary_path
 
-    # 2. Dependence plot: SHOT_DISTANCE_FT
+    # 2. Dependence plot: SHOT_DISTANCE_FT colored by SHOT_VALUE (2-pt vs 3-pt)
     fig, ax = plt.subplots(figsize=(8, 6))
     shap.dependence_plot(
         "SHOT_DISTANCE_FT",
         shap_explanation.values,
         X_test,
         feature_names=features,
-        interaction_index="ACTION_GROUP",
+        interaction_index="SHOT_VALUE",
         show=False,
         ax=ax,
     )
-    ax.set_title("SHAP Dependence: Shot Distance by Action Group", fontsize=12, fontweight="bold", pad=12)
+    ax.set_title("SHAP Dependence: Shot Distance by Shot Value (2 vs 3)", fontsize=12, fontweight="bold", pad=12)
     ax.grid(True, linestyle=":", alpha=0.5)
     dist_path = docs_dir / "shap_dependence_distance.png"
     plt.savefig(dist_path, dpi=200, bbox_inches="tight")
@@ -182,6 +182,41 @@ def save_shap_plots(
     plt.close("all")
     plot_paths["margin"] = margin_path
 
+    # 4. Action Group Mean Signed SHAP Bar Chart
+    fig, ax = plt.subplots(figsize=(9, 5))
+    act_idx = features.index("ACTION_GROUP")
+    action_shap = (
+        pd.DataFrame({
+            "action": X_test["ACTION_GROUP"],
+            "shap": shap_explanation.values[:, act_idx],
+        })
+        .groupby("action", observed=False)["shap"]
+        .mean()
+        .dropna()
+        .sort_values()
+    )
+    colors = ["#d62728" if v < 0 else "#2ca02c" for v in action_shap.values]
+    bars = ax.barh(action_shap.index, action_shap.values, color=colors, alpha=0.85)
+    ax.axvline(0, color="gray", linestyle="--", linewidth=1.0)
+    ax.set_xlabel("Mean Signed SHAP Value (Impact on Log-Odds)", fontsize=11)
+    ax.set_title("Mean Signed SHAP Impact by Shot Category (Test Set)", fontsize=12, fontweight="bold", pad=12)
+    ax.grid(True, linestyle=":", alpha=0.5, axis="x")
+    for bar, val in zip(bars, action_shap.values):
+        ax.text(
+            val + (0.02 if val >= 0 else -0.02),
+            bar.get_y() + bar.get_height() / 2,
+            f"{val:+.3f}",
+            va="center",
+            ha="left" if val >= 0 else "right",
+            fontsize=9,
+            fontweight="bold",
+        )
+    plt.tight_layout()
+    action_bar_path = docs_dir / "shap_action_group_bar.png"
+    plt.savefig(action_bar_path, dpi=200, bbox_inches="tight")
+    plt.close("all")
+    plot_paths["action_bar"] = action_bar_path
+
     return plot_paths
 
 
@@ -200,12 +235,14 @@ def audit_domain_consistency(
     home_fg_diff = home_stats[1]["mean"] - home_stats[0]["mean"]
     home_importance = feat_ranks.get("IS_HOME", 0.0)
 
-    # 2. Audit LOC_X vs LOC_Y
+    # 2. Collinear Location features
     loc_x_imp = feat_ranks.get("LOC_X", 0.0)
     loc_y_imp = feat_ranks.get("LOC_Y", 0.0)
+    dist_imp = feat_ranks.get("SHOT_DISTANCE_FT", 0.0)
+    angle_imp = feat_ranks.get("SHOT_ANGLE", 0.0)
+    loc_total_imp = loc_x_imp + loc_y_imp + dist_imp + angle_imp
 
     # 3. Audit SCORE_MARGIN
-    margin_stats = all_df.groupby("SCORE_MARGIN")["SHOT_MADE_FLAG"].agg(["count", "mean"]).to_dict("index")
     margin_imp = feat_ranks.get("SCORE_MARGIN", 0.0)
 
     # 4. Audit TIME_REMAINING_SEC
@@ -222,39 +259,41 @@ def audit_domain_consistency(
             "empirical_away_fg": float(home_stats[0]["mean"]),
             "fg_diff": float(home_fg_diff),
             "verdict": (
-                "Pass: IS_HOME exhibits a modest, realistic importance (~2.6% of total) "
-                f"reflecting the empirical +{home_fg_diff * 100:.1f}% home court shooting advantage, "
-                "without dominating the model or overfitting noise."
+                "Ablation finding: In 5-fold grouped CV ablation, adding IS_HOME produces no detectable "
+                "difference in Brier score (+0.00001, 95% CI [-0.00031, +0.00032], p=0.940) or log loss "
+                "(-0.00008, p=0.832). While raw home FG% is 3.3% higher league-wide, it provides no detectable "
+                "out-of-fold generalization gain at this sample size and could be dropped without performance loss."
             ),
         },
-        "court_symmetry": {
-            "loc_x_importance": loc_x_imp,
-            "loc_y_importance": loc_y_imp,
-            "ratio_y_to_x": loc_y_imp / loc_x_imp if loc_x_imp > 0 else 0.0,
+        "location_collinearity": {
+            "loc_total_importance": loc_total_imp,
+            "pct_of_total": float(loc_total_imp / ranked_df["mean_abs_shap"].sum() * 100.0),
             "verdict": (
-                f"Pass: Depth (LOC_Y: {loc_y_imp:.4f}) is {loc_y_imp / loc_x_imp:.1f}x more important "
-                f"than lateral offset (LOC_X: {loc_x_imp:.4f}), consistent with basketball court physics "
-                "and lateral symmetry."
+                "Collinearity note: LOC_X, LOC_Y, SHOT_DISTANCE_FT, and SHOT_ANGLE are geometrically collinear. "
+                "Individual SHAP shares inside this group are largely arbitrary due to tree split competition; "
+                f"only the group total ({loc_total_imp:.4f}, {loc_total_imp / ranked_df['mean_abs_shap'].sum() * 100.0:.1f}% "
+                "of total mean |SHAP|) is physically meaningful."
             ),
         },
         "score_margin": {
             "mean_abs_shap": margin_imp,
             "rank": int(ranked_df[ranked_df["feature"] == "SCORE_MARGIN"].index[0] + 1),
             "verdict": (
-                "Pass: SCORE_MARGIN ranks 9th of 11 features (~2.6% of importance). "
-                "Empirical clutch make rates show minimal direct variation with pre-shot score margin "
-                "(trailing vs leading make rates differ by < 1%), so low marginal importance is strictly correct."
+                "SCORE_MARGIN ranks 9th of 11 features (2.56% of total mean |SHAP|). "
+                "The apparent step between -3 and -2 reflects conditional vs marginal effects (trailing teams take 46.1% threes "
+                "vs 37.7% for leading teams) combined with tree partition noise at small sample sizes, "
+                "rather than a true structural jump in shot making."
             ),
         },
-        "time_pressure": {
+        "time_remaining": {
             "mean_abs_shap": time_imp,
             "rank": int(ranked_df[ranked_df["feature"] == "TIME_REMAINING_SEC"].index[0] + 1),
             "empirical_last_30s_fg": float(time_stats.loc[pd.Interval(0, 30)]["mean"]),
             "empirical_over_60s_fg": float(time_stats.loc[pd.Interval(60, 180)]["mean"]),
             "verdict": (
-                f"Pass: TIME_REMAINING_SEC is the #1 game context feature (rank 3 overall, {time_imp:.4f}). "
-                "It correctly captures the late-game efficiency drop (FG% drops from 45.7% to 40.2% in the final 30 seconds) "
-                "driven by defensive pressure, clock burn, and hurried shots."
+                f"TIME_REMAINING_SEC ranks 3rd overall ({time_imp:.4f}). In the data, raw FG% drops from 45.7% (60-180s) "
+                "to 40.2% in the final 30 seconds. Without tracking or defender data, we report this drop factually "
+                "without asserting causal mechanisms like defensive pressure; part of the effect may reflect shot-mix composition."
             ),
         },
     }

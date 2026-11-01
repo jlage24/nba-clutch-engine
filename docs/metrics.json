@@ -8,7 +8,9 @@
     "ECE confidence intervals under resampling are omitted because ECE is biased upward under resampling.",
     "Early stopping for XGBoost performed using an inner grouped split (80/20 games) of each training fold, leaving the outer OOF fold untouched.",
     "Final model uses median optimal trees across folds (91 trees).",
-    "Logistic++ includes one-hot ACTION_GROUP, IS_OT, and IS_HOME, with zero-variance columns automatically excluded."
+    "Logistic++ includes one-hot ACTION_GROUP, IS_OT, and IS_HOME, with zero-variance columns automatically excluded.",
+    "No detectable difference was detected between XGBoost and Logistic++ in Brier score or log loss at this sample size (test CI for Brier difference: [-0.0046, +0.0012], p=0.324; log loss difference: [-0.0113, +0.0027], p=0.276). The AUC p=0.020 is one of three uncorrected comparisons and is weak evidence.",
+    "Uncalibrated XGBoost is maintained as the production default and Logistic++ as the interpretable reference."
   ],
   "train_make_rate": 0.4376576576576577,
   "test_make_rate": 0.4369369369369369,

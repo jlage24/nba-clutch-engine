@@ -34,6 +34,7 @@ from sklearn.preprocessing import StandardScaler
 import xgboost as xgb
 
 from src.evaluate import (
+    PlattCalibrator,
     bootstrap_metrics,
     bootstrap_paired_difference,
     compute_metrics,
@@ -61,25 +62,6 @@ LOGISTIC_SIMPLE_FEATURES = [
     "TIME_REMAINING_SEC",
     "SCORE_MARGIN",
 ]
-
-
-class PlattCalibrator:
-    """Platt scaling: logistic regression on the logit of predicted probabilities."""
-
-    def __init__(self, random_state: int = 42):
-        self.random_state = random_state
-        self.lr = LogisticRegression(random_state=random_state)
-
-    def fit(self, probs: np.ndarray, y: np.ndarray) -> "PlattCalibrator":
-        p_clipped = np.clip(probs, 1e-6, 1.0 - 1e-6)
-        logits = logit(p_clipped).reshape(-1, 1)
-        self.lr.fit(logits, y)
-        return self
-
-    def predict_proba(self, probs: np.ndarray) -> np.ndarray:
-        p_clipped = np.clip(probs, 1e-6, 1.0 - 1e-6)
-        logits = logit(p_clipped).reshape(-1, 1)
-        return self.lr.predict_proba(logits)[:, 1]
 
 
 def get_cv_splits(train_df: pd.DataFrame, n_splits: int = 5) -> List[Tuple[np.ndarray, np.ndarray]]:
@@ -634,6 +616,8 @@ def main():
             "Early stopping for XGBoost performed using an inner grouped split (80/20 games) of each training fold, leaving the outer OOF fold untouched.",
             "Final model uses median optimal trees across folds (91 trees).",
             "Logistic++ includes one-hot ACTION_GROUP, IS_OT, and IS_HOME, with zero-variance columns automatically excluded.",
+            "No detectable difference was detected between XGBoost and Logistic++ in Brier score or log loss at this sample size (test CI for Brier difference: [-0.0046, +0.0012], p=0.324; log loss difference: [-0.0113, +0.0027], p=0.276). The AUC p=0.020 is one of three uncorrected comparisons and is weak evidence.",
+            "Uncalibrated XGBoost is maintained as the production default and Logistic++ as the interpretable reference.",
         ],
         "train_make_rate": float(y_train.mean()),
         "test_make_rate": float(y_test.mean()),
