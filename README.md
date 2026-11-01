@@ -83,7 +83,7 @@ python src/plot_shots.py             # 6. shot map -> docs/clutch_shot_map.png
 python src/features.py               # 7. feature table and split summary
 python src/train.py                  # 8. baselines, XGBoost, calibration, metrics, saved models
 python src/explain.py                # 9. SHAP plots and summaries -> docs/
-python src/predict.py                # 10. demo: xP for a few hand-made shots (add --calibrated for the optional Platt step)
+python src/predict.py                # 10. demo: P(make) and xP for a few hand-made shots, raw and Platt-calibrated side by side
 pytest                               # run the unit tests
 ```
 
@@ -92,6 +92,7 @@ Notes:
 - Step 1 takes a few minutes and step 2 takes roughly 30 to 40 minutes per season, because requests are spaced out to avoid rate limiting. Both are resumable.
 - `fetch_pbp.py --limit 20` downloads only the first 20 games, which is handy for testing the rest of the pipeline quickly.
 - Trained models are written to `models/` (gitignored), including the XGBoost model in portable JSON format.
+- Tests that need trained models are skipped until `python src/train.py` has run.
 
 ## Data
 
@@ -161,14 +162,14 @@ With about 155 shots per bin on this test set, sampling noise alone produces an 
 
 | Comparison | ΔBrier (95% CI) | ΔLog loss (95% CI) | ΔROC AUC (95% CI) |
 | :--- | :---: | :---: | :---: |
-| XGBoost vs constant | -0.0217 (-0.0283, -0.0159), p < 0.002 | -0.0461 (-0.0602, -0.0337), p < 0.002 | +0.164 (+0.140, +0.192), p < 0.002 |
+| XGBoost vs constant | -0.0217 (-0.0283, -0.0159), p < 0.002 | -0.0461 (-0.0602, -0.0329), p < 0.002 | +0.164 (+0.140, +0.192), p < 0.002 |
 | XGBoost vs Logistic++ | -0.0015 (-0.0050, +0.0010), p = 0.33 | -0.0039 (-0.0127, +0.0020), p = 0.29 | +0.012 (+0.001, +0.025), p = 0.02 |
 
 (500 resamples cannot resolve p-values below 0.002.) The XGBoost edge over Logistic++ is small, around 0.001 to 0.002 Brier, and whether it counts as "significant" depends on an arbitrary 0.05 threshold: an earlier version of the pipeline gave p = 0.06 for the Brier difference, and the feature sets of the models changed between versions. The AUC result is one of three uncorrected comparisons and is weak evidence on its own, so effect sizes with intervals are reported rather than verdicts.
 
 ### Calibration
 
-Calibrators were compared with nested grouped cross-validation on the training set, without touching the test set. Platt scaling (Brier 0.2203, log loss 0.6295) beat isotonic regression (Brier 0.2211, log loss 0.6588), but the fitted Platt parameters (slope 1.14, intercept 0.04) are close to the identity, so raw XGBoost probabilities are already well calibrated. **Uncalibrated XGBoost is the default**, and the Platt step is an optional flag in `predict.py`.
+Calibrators were compared with nested grouped cross-validation on the training set, without touching the test set. Platt scaling (Brier 0.2203, log loss 0.6295) beat isotonic regression (Brier 0.2211, log loss 0.6588), but the fitted Platt parameters (slope 1.14, intercept 0.04) are close to the identity, so raw XGBoost probabilities are already well calibrated. **Uncalibrated XGBoost is the default**, and the Platt step is available through the calibrated=True argument of predict_make_probability and expected_points in predict.py.
 
 ### Feature ablation
 
@@ -243,7 +244,7 @@ Being upfront about what this model can and can't claim:
 │   ├── explain.py                # SHAP analysis
 │   └── predict.py                # P(make) and xP for a single shot or a table
 ├── tests/                        # pytest unit tests
-├── docs/                         # figures used in this README
+├── docs/                         # figures and metrics JSON used in this README
 ├── models/                       # gitignored: trained model files
 ├── data/                         # gitignored: raw and processed Parquet files
 ├── requirements.txt

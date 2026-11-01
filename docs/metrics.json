@@ -19,12 +19,33 @@
   "hyperparameter_search": {
     "search_space_size": 108,
     "search_grid": {
-      "max_depth": [2, 3, 4, 5],
-      "learning_rate": [0.02, 0.03, 0.05],
-      "min_child_weight": [15, 25, 40],
-      "subsample": [0.8],
-      "colsample_bytree": [0.8],
-      "reg_lambda": [0.5, 1.0, 3.0]
+      "max_depth": [
+        2,
+        3,
+        4,
+        5
+      ],
+      "learning_rate": [
+        0.02,
+        0.03,
+        0.05
+      ],
+      "min_child_weight": [
+        15,
+        25,
+        40
+      ],
+      "subsample": [
+        0.8
+      ],
+      "colsample_bytree": [
+        0.8
+      ],
+      "reg_lambda": [
+        0.5,
+        1.0,
+        3.0
+      ]
     },
     "cv_scheme": "5-fold GroupKFold on GAME_ID with inner 80/20 grouped early stopping"
   },
