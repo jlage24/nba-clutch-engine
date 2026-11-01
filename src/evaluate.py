@@ -173,12 +173,21 @@ def bootstrap_metrics(
         arr = np.array(boot_records[m])
         # Filter out NaNs if any fold had single-class target for AUC
         valid_arr = arr[~np.isnan(arr)] if np.isnan(arr).any() else arr
-        results[m] = {
-            "point": point_estimates[m],
-            "ci_lower": float(np.percentile(valid_arr, lower_p)) if len(valid_arr) else np.nan,
-            "ci_upper": float(np.percentile(valid_arr, upper_p)) if len(valid_arr) else np.nan,
-            "std_err": float(np.std(valid_arr, ddof=1)) if len(valid_arr) > 1 else np.nan,
-        }
+        if m == "ece":
+            # Resampled ECE is biased upward due to finite-sample bin noise; report point estimate only
+            results[m] = {
+                "point": point_estimates[m],
+                "ci_lower": np.nan,
+                "ci_upper": np.nan,
+                "std_err": np.nan,
+            }
+        else:
+            results[m] = {
+                "point": point_estimates[m],
+                "ci_lower": float(np.percentile(valid_arr, lower_p)) if len(valid_arr) else np.nan,
+                "ci_upper": float(np.percentile(valid_arr, upper_p)) if len(valid_arr) else np.nan,
+                "std_err": float(np.std(valid_arr, ddof=1)) if len(valid_arr) > 1 else np.nan,
+            }
 
     return results
 
@@ -353,7 +362,7 @@ def format_metrics_table(results_dict: Mapping[str, Dict[str, Dict[str, float]]]
         auc_str = f"{auc['point']:.3f} ({auc['ci_lower']:.3f}, {auc['ci_upper']:.3f})"
 
         ece = metrics["ece"]
-        ece_str = f"{ece['point']:.4f} ({ece['ci_lower']:.4f}, {ece['ci_upper']:.4f})"
+        ece_str = f"{ece['point']:.4f}"
 
         rows.append(f"| {model} | {b_str} | {ll_str} | {auc_str} | {ece_str} |")
 
@@ -364,13 +373,20 @@ def format_paired_diff_table(
     diff_results: Dict[str, Dict[str, float]],
     model_a_name: str,
     model_b_name: str,
+    include_metrics: Optional[Sequence[str]] = None,
 ) -> str:
-    """Format paired bootstrap differences into a markdown table."""
+    """Format paired bootstrap differences into a markdown table.
+
+    By default, excludes ECE because percentile bootstrap intervals for ECE
+    are upward-biased under resampling.
+    """
     rows = []
     rows.append(f"| Metric | Point Diff ({model_b_name} - {model_a_name}) | 95% Bootstrap CI | Std Err | p-value |")
     rows.append("| :--- | :--- | :--- | :--- | :--- |")
 
-    for metric_name, stats in diff_results.items():
+    target_metrics = include_metrics or [m for m in ("brier", "log_loss", "roc_auc") if m in diff_results]
+    for metric_name in target_metrics:
+        stats = diff_results[metric_name]
         diff_str = f"{stats['point_diff']:+.4f}"
         ci_str = f"[{stats['ci_lower']:+.4f}, {stats['ci_upper']:+.4f}]"
         se_str = f"{stats['std_err']:.4f}"

@@ -3,8 +3,12 @@
     "Calibrator selection performed strictly via 5-fold nested grouped CV on training set.",
     "Earlier preliminary exploratory inspection of isotonic regression on test set showed log loss penalty (0.723 vs 0.641 for Platt) due to edge bin step plateaus.",
     "Platt scaling is close to the identity mapping (coef ~ 1.08, intercept ~ 0.03), confirming raw XGBoost calibration.",
+    "Uncalibrated XGBoost is shipped as the default production model since Platt brings no significant metric gain.",
+    "OOF headline numbers are mildly optimistic because hyperparameters were tuned on the same 5 folds.",
+    "ECE confidence intervals under resampling are omitted because ECE is biased upward under resampling.",
     "Early stopping for XGBoost performed using an inner grouped split (80/20 games) of each training fold, leaving the outer OOF fold untouched.",
-    "Final model uses median optimal trees across folds (91 trees)."
+    "Final model uses median optimal trees across folds (91 trees).",
+    "Logistic++ includes one-hot ACTION_GROUP, IS_OT, and IS_HOME, with zero-variance columns automatically excluded."
   ],
   "train_make_rate": 0.4376576576576577,
   "test_make_rate": 0.4369369369369369,
@@ -112,6 +116,7 @@
     "coef": 1.084403795567179,
     "intercept": 0.02589107666652107
   },
+  "default_model": "XGBoost (Uncalibrated)",
   "oof_headline_metrics": {
     "Constant Baseline": {
       "brier": {
@@ -134,9 +139,9 @@
       },
       "ece": {
         "point": 0.011981981981981981,
-        "ci_lower": 0.005580289347459506,
-        "ci_upper": 0.026223604577744364,
-        "std_err": 0.00512876841082807
+        "ci_lower": NaN,
+        "ci_upper": NaN,
+        "std_err": NaN
       }
     },
     "Logistic Regression (Simple)": {
@@ -160,9 +165,9 @@
       },
       "ece": {
         "point": 0.038897526555675736,
-        "ci_lower": 0.030607325760050274,
-        "ci_upper": 0.053134096036041085,
-        "std_err": 0.00582090571808354
+        "ci_lower": NaN,
+        "ci_upper": NaN,
+        "std_err": NaN
       }
     },
     "Logistic Regression (Logistic+)": {
@@ -186,12 +191,38 @@
       },
       "ece": {
         "point": 0.028160506143320888,
-        "ci_lower": 0.025451380601934918,
-        "ci_upper": 0.04542781308043527,
-        "std_err": 0.005453271730176504
+        "ci_lower": NaN,
+        "ci_upper": NaN,
+        "std_err": NaN
       }
     },
-    "XGBoost (Uncalibrated)": {
+    "Logistic Regression (Logistic++)": {
+      "brier": {
+        "point": 0.22167344472447406,
+        "ci_lower": 0.21770157366323292,
+        "ci_upper": 0.22561322123533673,
+        "std_err": 0.001988392596265143
+      },
+      "log_loss": {
+        "point": 0.6322404989059809,
+        "ci_lower": 0.6234681197788298,
+        "ci_upper": 0.6412571264237169,
+        "std_err": 0.004417692357303987
+      },
+      "roc_auc": {
+        "point": 0.6659418415390554,
+        "ci_lower": 0.6501274240905525,
+        "ci_upper": 0.6802619413744794,
+        "std_err": 0.007564071324553079
+      },
+      "ece": {
+        "point": 0.020443638974561064,
+        "ci_lower": NaN,
+        "ci_upper": NaN,
+        "std_err": NaN
+      }
+    },
+    "XGBoost (Uncalibrated, Default)": {
       "brier": {
         "point": 0.2198686086680077,
         "ci_lower": 0.21624924226444595,
@@ -212,9 +243,9 @@
       },
       "ece": {
         "point": 0.013563212728178183,
-        "ci_lower": 0.012237759879502224,
-        "ci_upper": 0.03083862624627918,
-        "std_err": 0.004774302613720051
+        "ci_lower": NaN,
+        "ci_upper": NaN,
+        "std_err": NaN
       }
     },
     "XGBoost (Calibrated)": {
@@ -238,9 +269,9 @@
       },
       "ece": {
         "point": 0.012388440674804898,
-        "ci_lower": 0.012810295532957252,
-        "ci_upper": 0.029554134998883,
-        "std_err": 0.004642701083012371
+        "ci_lower": NaN,
+        "ci_upper": NaN,
+        "std_err": NaN
       }
     }
   },
@@ -266,9 +297,9 @@
       },
       "ece": {
         "point": 0.0007207207207208799,
-        "ci_lower": 0.0004036088134416028,
-        "ci_upper": 0.0221966430315839,
-        "std_err": 0.006076829722131701
+        "ci_lower": NaN,
+        "ci_upper": NaN,
+        "std_err": NaN
       }
     },
     "Logistic Regression (Simple)": {
@@ -292,9 +323,9 @@
       },
       "ece": {
         "point": 0.046196072231854096,
-        "ci_lower": 0.03639687788814648,
-        "ci_upper": 0.07755898968055427,
-        "std_err": 0.010075232626702032
+        "ci_lower": NaN,
+        "ci_upper": NaN,
+        "std_err": NaN
       }
     },
     "Logistic Regression (Logistic+)": {
@@ -318,12 +349,38 @@
       },
       "ece": {
         "point": 0.040863086752631755,
-        "ci_lower": 0.03534550303203623,
-        "ci_upper": 0.08058438898079218,
-        "std_err": 0.011568898332861031
+        "ci_lower": NaN,
+        "ci_upper": NaN,
+        "std_err": NaN
       }
     },
-    "XGBoost (Uncalibrated)": {
+    "Logistic Regression (Logistic++)": {
+      "brier": {
+        "point": 0.22581951851668228,
+        "ci_lower": 0.21830752724395228,
+        "ci_upper": 0.23295677364126602,
+        "std_err": 0.003995688552418626
+      },
+      "log_loss": {
+        "point": 0.643038955640453,
+        "ci_lower": 0.6251184066385382,
+        "ci_upper": 0.6600320187046993,
+        "std_err": 0.00920133280828368
+      },
+      "roc_auc": {
+        "point": 0.6521237113402062,
+        "ci_lower": 0.627264527403443,
+        "ci_upper": 0.6788923217463106,
+        "std_err": 0.013769804742991663
+      },
+      "ece": {
+        "point": 0.03313265531733444,
+        "ci_lower": NaN,
+        "ci_upper": NaN,
+        "std_err": NaN
+      }
+    },
+    "XGBoost (Uncalibrated, Default)": {
       "brier": {
         "point": 0.2244254504376727,
         "ci_lower": 0.2166705221390934,
@@ -344,9 +401,9 @@
       },
       "ece": {
         "point": 0.03659238961634334,
-        "ci_lower": 0.025668009660855938,
-        "ci_upper": 0.06415746790667376,
-        "std_err": 0.009461822317435357
+        "ci_lower": NaN,
+        "ci_upper": NaN,
+        "std_err": NaN
       }
     },
     "XGBoost (Calibrated)": {
@@ -370,25 +427,25 @@
       },
       "ece": {
         "point": 0.040462179934266845,
-        "ci_lower": 0.026707039620413094,
-        "ci_upper": 0.06731751099393019,
-        "std_err": 0.009899172373990243
+        "ci_lower": NaN,
+        "ci_upper": NaN,
+        "std_err": NaN
       }
     }
   },
   "paired_diff_vs_constant": {
     "brier": {
-      "point_diff": -0.021236807004308855,
-      "ci_lower": -0.02876901379317685,
-      "ci_upper": -0.014611387131366817,
-      "std_err": 0.0037373482380903874,
+      "point_diff": -0.02159811907778872,
+      "ci_lower": -0.028677619109601832,
+      "ci_upper": -0.015281778071504472,
+      "std_err": 0.00351644056868608,
       "p_value": 0.0
     },
     "log_loss": {
-      "point_diff": -0.044730370141652376,
-      "ci_lower": -0.06168200122566642,
-      "ci_upper": -0.02934302710733101,
-      "std_err": 0.008591522179032932,
+      "point_diff": -0.04571720023606951,
+      "ci_lower": -0.06133936763266598,
+      "ci_upper": -0.0314186253383953,
+      "std_err": 0.00794666076685307,
       "p_value": 0.0
     },
     "roc_auc": {
@@ -399,26 +456,26 @@
       "p_value": 0.0
     },
     "ece": {
-      "point_diff": 0.039741459213545965,
-      "ci_lower": 0.01672756596646637,
-      "ci_upper": 0.059901217602900174,
-      "std_err": 0.01123578033869593,
+      "point_diff": 0.03587166889562246,
+      "ci_lower": 0.01419327058415509,
+      "ci_upper": 0.05686897920307074,
+      "std_err": 0.010834694420443113,
       "p_value": 0.0
     }
   },
   "paired_diff_vs_logistic_simple": {
     "brier": {
-      "point_diff": -0.008856078488836405,
-      "ci_lower": -0.012801281249782753,
-      "ci_upper": -0.004703027715107345,
-      "std_err": 0.0021620692677910185,
+      "point_diff": -0.009217390562316269,
+      "ci_lower": -0.013006282597509994,
+      "ci_upper": -0.005129434484137859,
+      "std_err": 0.0021205957657174034,
       "p_value": 0.0
     },
     "log_loss": {
-      "point_diff": -0.01956857544933366,
-      "ci_lower": -0.02943965506806754,
-      "ci_upper": -0.008690414615747455,
-      "std_err": 0.005317347068072012,
+      "point_diff": -0.020555405543750793,
+      "ci_lower": -0.029491866399462115,
+      "ci_upper": -0.010154615453134569,
+      "std_err": 0.00503762541257119,
       "p_value": 0.0
     },
     "roc_auc": {
@@ -429,26 +486,26 @@
       "p_value": 0.0
     },
     "ece": {
-      "point_diff": -0.005733892297587251,
-      "ci_lower": -0.039209130583912385,
-      "ci_upper": 0.016527250352989933,
-      "std_err": 0.01418660468725319,
-      "p_value": 0.544
+      "point_diff": -0.009603682615510756,
+      "ci_lower": -0.03952221493373419,
+      "ci_upper": 0.014646472743220104,
+      "std_err": 0.013982571014504121,
+      "p_value": 0.404
     }
   },
   "paired_diff_vs_logistic_plus": {
     "brier": {
-      "point_diff": -0.007995716833394562,
-      "ci_lower": -0.011772541285047147,
-      "ci_upper": -0.0038911449086928545,
-      "std_err": 0.0019547231213017566,
+      "point_diff": -0.008357028906874425,
+      "ci_lower": -0.011975867392974697,
+      "ci_upper": -0.00443657678159833,
+      "std_err": 0.001921038955256438,
       "p_value": 0.0
     },
     "log_loss": {
-      "point_diff": -0.018266307017885564,
-      "ci_lower": -0.028079291870224284,
-      "ci_upper": -0.007468962161365005,
-      "std_err": 0.0051311604224822,
+      "point_diff": -0.0192531371123027,
+      "ci_lower": -0.028272349712589063,
+      "ci_upper": -0.009188139083985582,
+      "std_err": 0.00486898089500133,
       "p_value": 0.0
     },
     "roc_auc": {
@@ -459,11 +516,71 @@
       "p_value": 0.0
     },
     "ece": {
-      "point_diff": -0.00040090681836491004,
-      "ci_lower": -0.038618943982475555,
-      "ci_upper": 0.017136232813112235,
-      "std_err": 0.013993454187947582,
-      "p_value": 0.476
+      "point_diff": -0.004270697136288415,
+      "ci_lower": -0.04088051325592428,
+      "ci_upper": 0.014159588767323771,
+      "std_err": 0.01373443337508227,
+      "p_value": 0.364
+    }
+  },
+  "paired_diff_vs_logistic_pp": {
+    "brier": {
+      "point_diff": -0.001394068079009575,
+      "ci_lower": -0.004630837633352895,
+      "ci_upper": 0.001192525225592249,
+      "std_err": 0.0014915004474974453,
+      "p_value": 0.324
+    },
+    "log_loss": {
+      "point_diff": -0.0035830432669350376,
+      "ci_lower": -0.011345668422035732,
+      "ci_upper": 0.0026595819758069308,
+      "std_err": 0.003564474404147686,
+      "p_value": 0.276
+    },
+    "roc_auc": {
+      "point_diff": 0.011371344414054296,
+      "ci_lower": 0.001985345023159277,
+      "ci_upper": 0.02251096472665777,
+      "std_err": 0.005690172767232555,
+      "p_value": 0.02
+    },
+    "ece": {
+      "point_diff": 0.0034597342990089,
+      "ci_lower": -0.021183910677253802,
+      "ci_upper": 0.023465540242539582,
+      "std_err": 0.011945981039105923,
+      "p_value": 0.928
+    }
+  },
+  "paired_diff_cal_vs_logistic_pp": {
+    "brier": {
+      "point_diff": -0.0010327560055297114,
+      "ci_lower": -0.004435254715993838,
+      "ci_upper": 0.0015241594905306777,
+      "std_err": 0.001543093847723822,
+      "p_value": 0.46
+    },
+    "log_loss": {
+      "point_diff": -0.0025962131725179027,
+      "ci_lower": -0.010715868691532923,
+      "ci_upper": 0.003482193038904846,
+      "std_err": 0.003657590420042597,
+      "p_value": 0.444
+    },
+    "roc_auc": {
+      "point_diff": 0.011371344414054296,
+      "ci_lower": 0.001985345023159277,
+      "ci_upper": 0.02251096472665777,
+      "std_err": 0.005690172767232555,
+      "p_value": 0.02
+    },
+    "ece": {
+      "point_diff": 0.007329524616932405,
+      "ci_lower": -0.018264307893407487,
+      "ci_upper": 0.025083498849405153,
+      "std_err": 0.011878076511788108,
+      "p_value": 0.808
     }
   }
 }

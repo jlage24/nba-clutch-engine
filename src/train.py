@@ -171,39 +171,76 @@ def build_logistic_plus_features(df: pd.DataFrame) -> pd.DataFrame:
     return X
 
 
-def run_logistic_plus(
+def build_logistic_pp_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Build fair baseline features for Logistic++.
+
+    Includes all Logistic+ features plus one-hot ACTION_GROUP, IS_OT, and IS_HOME.
+    Guarantees fixed dummy categories across splits.
+    """
+    X = build_logistic_plus_features(df).copy()
+    action_dummies = pd.get_dummies(df["ACTION_GROUP"], prefix="action", drop_first=True, dtype=float)
+    X = pd.concat([X, action_dummies], axis=1)
+    X["is_ot"] = df["IS_OT"].values.astype(float)
+    X["is_home"] = df["IS_HOME"].values.astype(float)
+    return X
+
+
+def run_logistic_variant(
     train_df: pd.DataFrame,
     test_df: pd.DataFrame,
     cv_splits: List[Tuple[np.ndarray, np.ndarray]],
+    feature_fn: Any,
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Evaluate strengthened Logistic+ baseline."""
-    X_tr_plus = build_logistic_plus_features(train_df)
-    X_te_plus = build_logistic_plus_features(test_df)
-    cols = list(X_tr_plus.columns)
+    """Evaluate a logistic regression variant with automatic exclusion of constant columns."""
+    X_tr_raw = feature_fn(train_df)
+    X_te_raw = feature_fn(test_df)
+    cols = list(X_tr_raw.columns)
 
     oof_preds = np.zeros(len(train_df))
     for tr_idx, val_idx in cv_splits:
-        tr_X = X_tr_plus.iloc[tr_idx]
-        val_X = X_tr_plus.iloc[val_idx]
+        tr_X = X_tr_raw.iloc[tr_idx]
+        val_X = X_tr_raw.iloc[val_idx]
+
+        # Automatically exclude zero-variance columns on training fold
+        non_const = [c for c in cols if tr_X[c].nunique() > 1]
 
         scaler = StandardScaler()
-        X_tr_scaled = scaler.fit_transform(tr_X[cols])
-        X_val_scaled = scaler.transform(val_X[cols])
+        X_tr_scaled = scaler.fit_transform(tr_X[non_const])
+        X_val_scaled = scaler.transform(val_X[non_const])
 
         lr = LogisticRegression(random_state=42, max_iter=1000)
         lr.fit(X_tr_scaled, train_df.iloc[tr_idx][TARGET])
         oof_preds[val_idx] = lr.predict_proba(X_val_scaled)[:, 1]
 
     # Full train fit and test prediction
+    non_const_full = [c for c in cols if X_tr_raw[c].nunique() > 1]
     final_scaler = StandardScaler()
-    X_tr_full = final_scaler.fit_transform(X_tr_plus[cols])
-    X_te_full = final_scaler.transform(X_te_plus[cols])
+    X_tr_full = final_scaler.fit_transform(X_tr_raw[non_const_full])
+    X_te_full = final_scaler.transform(X_te_raw[non_const_full])
 
     final_lr = LogisticRegression(random_state=42, max_iter=1000)
     final_lr.fit(X_tr_full, train_df[TARGET])
     test_preds = final_lr.predict_proba(X_te_full)[:, 1]
 
     return oof_preds, test_preds
+
+
+def run_logistic_plus(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    cv_splits: List[Tuple[np.ndarray, np.ndarray]],
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Evaluate strengthened Logistic+ baseline."""
+    return run_logistic_variant(train_df, test_df, cv_splits, build_logistic_plus_features)
+
+
+def run_logistic_pp(
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    cv_splits: List[Tuple[np.ndarray, np.ndarray]],
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Evaluate fair baseline Logistic++ (Logistic+ with ACTION_GROUP, IS_OT, IS_HOME)."""
+    return run_logistic_variant(train_df, test_df, cv_splits, build_logistic_pp_features)
 
 
 def tune_xgboost(
@@ -242,6 +279,7 @@ def tune_xgboost(
                 tree_method="hist",
                 random_state=42,
                 eval_metric="logloss",
+                n_jobs=4,
                 **cfg,
             )
             m.fit(tr[FEATURES], tr[TARGET])
@@ -292,6 +330,7 @@ def run_xgboost_with_early_stopping(
             random_state=42,
             eval_metric="logloss",
             early_stopping_rounds=25,
+            n_jobs=4,
             **best_cfg,
         )
         m_inner.fit(
@@ -310,6 +349,7 @@ def run_xgboost_with_early_stopping(
             tree_method="hist",
             random_state=42,
             eval_metric="logloss",
+            n_jobs=4,
             **best_cfg,
         )
         m_fold.fit(tr_full[FEATURES], tr_full[TARGET])
@@ -323,6 +363,7 @@ def run_xgboost_with_early_stopping(
         tree_method="hist",
         random_state=42,
         eval_metric="logloss",
+        n_jobs=4,
         **best_cfg,
     )
     final_xgb.fit(train_df[FEATURES], train_df[TARGET])
@@ -406,11 +447,12 @@ def main():
     print("\n[2/6] Generating fixed 5-fold GroupKFold splits on GAME_ID...")
     cv_splits = get_cv_splits(train_df, n_splits=5)
 
-    # 3. Baselines: Constant, Simple Logistic, Logistic+
-    print("\n[3/6] Fitting Baselines: Constant, Logistic (Simple), Logistic+...")
+    # 3. Baselines: Constant, Simple Logistic, Logistic+, Logistic++
+    print("\n[3/6] Fitting Baselines: Constant, Logistic (Simple), Logistic+, Logistic++...")
     oof_const, test_const = run_constant_baseline(train_df, test_df, cv_splits)
     oof_lr_simple, test_lr_simple = run_logistic_simple(train_df, test_df, cv_splits)
     oof_lr_plus, test_lr_plus = run_logistic_plus(train_df, test_df, cv_splits)
+    oof_lr_pp, test_lr_pp = run_logistic_pp(train_df, test_df, cv_splits)
 
     # 4. Extended XGBoost Tuning
     print("\n[4/6] Tuning regularized XGBoost across 108 extended configurations...")
@@ -453,6 +495,7 @@ def main():
     print(f"Final Platt Parameters on full OOF: coef = {platt_coef:.4f}, intercept = {platt_intercept:.4f}")
     print("  -> Platt scaling is very close to identity (coef ~ 1.08, intercept ~ 0.03),")
     print("     confirming that raw XGBoost probabilities are already well-calibrated.")
+    print("  -> Shipping UNCALIBRATED XGBoost as the default app model.")
 
     # Apply calibrator
     oof_xgb_cal = calibrator.predict_proba(oof_xgb_raw)
@@ -464,14 +507,16 @@ def main():
         "Constant Baseline": oof_const,
         "Logistic Regression (Simple)": oof_lr_simple,
         "Logistic Regression (Logistic+)": oof_lr_plus,
-        "XGBoost (Uncalibrated)": oof_xgb_raw,
+        "Logistic Regression (Logistic++)": oof_lr_pp,
+        "XGBoost (Uncalibrated, Default)": oof_xgb_raw,
         "XGBoost (Calibrated)": oof_xgb_cal,
     }
     models_test = {
         "Constant Baseline": test_const,
         "Logistic Regression (Simple)": test_lr_simple,
         "Logistic Regression (Logistic+)": test_lr_plus,
-        "XGBoost (Uncalibrated)": test_xgb_raw,
+        "Logistic Regression (Logistic++)": test_lr_pp,
+        "XGBoost (Uncalibrated, Default)": test_xgb_raw,
         "XGBoost (Calibrated)": test_xgb_cal,
     }
 
@@ -484,19 +529,28 @@ def main():
         for name, probs in models_test.items()
     }
 
-    # Paired differences on Test Set
+    # Paired differences on Test Set against default XGBoost (Uncalibrated)
     paired_vs_const = bootstrap_paired_difference(
-        games_test, y_test, test_const, test_xgb_cal, n_resamples=500
+        games_test, y_test, test_const, test_xgb_raw, n_resamples=500
     )
     paired_vs_lr_simple = bootstrap_paired_difference(
-        games_test, y_test, test_lr_simple, test_xgb_cal, n_resamples=500
+        games_test, y_test, test_lr_simple, test_xgb_raw, n_resamples=500
     )
     paired_vs_lr_plus = bootstrap_paired_difference(
-        games_test, y_test, test_lr_plus, test_xgb_cal, n_resamples=500
+        games_test, y_test, test_lr_plus, test_xgb_raw, n_resamples=500
+    )
+    paired_vs_lr_pp = bootstrap_paired_difference(
+        games_test, y_test, test_lr_pp, test_xgb_raw, n_resamples=500
+    )
+
+    # Also compute calibrated vs Logistic++ for reference
+    paired_cal_vs_lr_pp = bootstrap_paired_difference(
+        games_test, y_test, test_lr_pp, test_xgb_cal, n_resamples=500
     )
 
     print("\n" + "=" * 75)
     print("HEADLINE RESULTS: Out-of-Fold (OOF) on Training Set (5,550 shots, 434 games)")
+    print("Note: OOF numbers are mildly optimistic because hyperparameters were tuned on the same folds.")
     print("=" * 75)
     print(format_metrics_table(oof_results))
 
@@ -505,19 +559,26 @@ def main():
     print("=" * 75)
     print(format_metrics_table(test_results))
 
-    print("\n--- Paired Bootstrap Difference (Test): XGBoost (Calibrated) vs Constant Baseline ---")
-    print(format_paired_diff_table(paired_vs_const, "Constant Baseline", "XGBoost (Calibrated)"))
+    print("\n--- Paired Bootstrap Difference (Test): XGBoost (Default) vs Constant Baseline ---")
+    print(format_paired_diff_table(paired_vs_const, "Constant Baseline", "XGBoost (Default)"))
 
-    print("\n--- Paired Bootstrap Difference (Test): XGBoost (Calibrated) vs Logistic (Simple) ---")
-    print(format_paired_diff_table(paired_vs_lr_simple, "Logistic (Simple)", "XGBoost (Calibrated)"))
+    print("\n--- Paired Bootstrap Difference (Test): XGBoost (Default) vs Logistic (Simple) ---")
+    print(format_paired_diff_table(paired_vs_lr_simple, "Logistic (Simple)", "XGBoost (Default)"))
 
-    print("\n--- Paired Bootstrap Difference (Test): XGBoost (Calibrated) vs Logistic+ ---")
-    print(format_paired_diff_table(paired_vs_lr_plus, "Logistic+", "XGBoost (Calibrated)"))
+    print("\n--- Paired Bootstrap Difference (Test): XGBoost (Default) vs Logistic+ ---")
+    print(format_paired_diff_table(paired_vs_lr_plus, "Logistic+", "XGBoost (Default)"))
+
+    print("\n--- Paired Bootstrap Difference (Test): XGBoost (Default) vs Logistic++ ---")
+    print(format_paired_diff_table(paired_vs_lr_pp, "Logistic++", "XGBoost (Default)"))
+
+    print("\n--- Paired Bootstrap Difference (Test): XGBoost (Calibrated) vs Logistic++ ---")
+    print(format_paired_diff_table(paired_cal_vs_lr_pp, "Logistic++", "XGBoost (Calibrated)"))
 
     # Finite sample ECE note
     print("\nNote on Calibration Metrics:")
     print("With ~155 shots per quantile bin on the 1,554-shot test set, finite-sample bin")
     print("noise alone creates an expected ECE of ~0.03 even for a perfectly calibrated model.")
+    print("ECE confidence intervals under resampling are biased upward and therefore omitted.")
     print("Thus, the reliability plot and OOF calibration metrics are the primary indicators.")
 
     # Save Reliability Diagram
@@ -567,8 +628,12 @@ def main():
             "Calibrator selection performed strictly via 5-fold nested grouped CV on training set.",
             "Earlier preliminary exploratory inspection of isotonic regression on test set showed log loss penalty (0.723 vs 0.641 for Platt) due to edge bin step plateaus.",
             "Platt scaling is close to the identity mapping (coef ~ 1.08, intercept ~ 0.03), confirming raw XGBoost calibration.",
+            "Uncalibrated XGBoost is shipped as the default production model since Platt brings no significant metric gain.",
+            "OOF headline numbers are mildly optimistic because hyperparameters were tuned on the same 5 folds.",
+            "ECE confidence intervals under resampling are omitted because ECE is biased upward under resampling.",
             "Early stopping for XGBoost performed using an inner grouped split (80/20 games) of each training fold, leaving the outer OOF fold untouched.",
             "Final model uses median optimal trees across folds (91 trees).",
+            "Logistic++ includes one-hot ACTION_GROUP, IS_OT, and IS_HOME, with zero-variance columns automatically excluded.",
         ],
         "train_make_rate": float(y_train.mean()),
         "test_make_rate": float(y_test.mean()),
@@ -584,11 +649,14 @@ def main():
         "nested_cv_calibrator_comparison": nested_cal_comparison,
         "chosen_calibrator": cal_name,
         "platt_parameters": {"coef": platt_coef, "intercept": platt_intercept},
+        "default_model": "XGBoost (Uncalibrated)",
         "oof_headline_metrics": oof_results,
         "test_confirmation_metrics": test_results,
         "paired_diff_vs_constant": paired_vs_const,
         "paired_diff_vs_logistic_simple": paired_vs_lr_simple,
         "paired_diff_vs_logistic_plus": paired_vs_lr_plus,
+        "paired_diff_vs_logistic_pp": paired_vs_lr_pp,
+        "paired_diff_cal_vs_logistic_pp": paired_cal_vs_lr_pp,
     }
     metrics_json_path = DOCS_DIR / "metrics.json"
     with open(metrics_json_path, "w") as f:

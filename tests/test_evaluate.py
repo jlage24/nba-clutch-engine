@@ -84,15 +84,19 @@ def test_bootstrap_metrics():
 
     res = bootstrap_metrics(game_ids, y, p, n_resamples=50, alpha=0.05, random_state=42)
 
-    for m in ["brier", "log_loss", "roc_auc", "ece"]:
+    for m in ["brier", "log_loss", "roc_auc"]:
         assert m in res
-        point = res[m]["point"]
         ci_lower = res[m]["ci_lower"]
         ci_upper = res[m]["ci_upper"]
         std_err = res[m]["std_err"]
-
         assert ci_lower <= ci_upper
         assert std_err >= 0.0
+
+    # ECE bootstrap CI is invalid due to upward bias; must be omitted (NaN)
+    assert "ece" in res
+    assert np.isnan(res["ece"]["ci_lower"])
+    assert np.isnan(res["ece"]["ci_upper"])
+    assert res["ece"]["point"] >= 0.0
 
 
 def test_bootstrap_paired_difference():
