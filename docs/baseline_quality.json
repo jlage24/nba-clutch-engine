@@ -1,0 +1,157 @@
+{
+  "n_regular_oof": 196198,
+  "model_A_metrics": {
+    "brier": 0.22649261580816407,
+    "log_loss": 0.6424153846942374,
+    "roc_auc": 0.6525978828676425,
+    "ece": 0.003249452332390478
+  },
+  "constant_baseline_metrics": {
+    "brier": 0.2492614309072669,
+    "log_loss": 0.6916693142012371,
+    "roc_auc": 0.5,
+    "ece": 1.1102230246251565e-16
+  },
+  "auc_leakage_check": {
+    "auc": 0.6525978828676425,
+    "threshold": 0.75,
+    "ok": true
+  },
+  "residuals_by_shot_value": [
+    {
+      "label": "SHOT_VALUE=2",
+      "n": 114888,
+      "mean_residual_pp": 0.077,
+      "std_residual_pp": 47.243
+    },
+    {
+      "label": "SHOT_VALUE=3",
+      "n": 81310,
+      "mean_residual_pp": -0.114,
+      "std_residual_pp": 48.078
+    }
+  ],
+  "residuals_by_action_group": [
+    {
+      "label": "ACTION_GROUP=dunk",
+      "n": 11937,
+      "mean_residual_pp": 0.835,
+      "std_residual_pp": 31.261
+    },
+    {
+      "label": "ACTION_GROUP=layup",
+      "n": 51538,
+      "mean_residual_pp": -0.095,
+      "std_residual_pp": 47.878
+    },
+    {
+      "label": "ACTION_GROUP=hook",
+      "n": 5192,
+      "mean_residual_pp": -0.05,
+      "std_residual_pp": 49.769
+    },
+    {
+      "label": "ACTION_GROUP=floater",
+      "n": 17287,
+      "mean_residual_pp": -0.178,
+      "std_residual_pp": 49.665
+    },
+    {
+      "label": "ACTION_GROUP=stepback",
+      "n": 9995,
+      "mean_residual_pp": 0.056,
+      "std_residual_pp": 48.393
+    },
+    {
+      "label": "ACTION_GROUP=pullup",
+      "n": 26438,
+      "mean_residual_pp": -0.076,
+      "std_residual_pp": 48.366
+    },
+    {
+      "label": "ACTION_GROUP=fadeaway",
+      "n": 9830,
+      "mean_residual_pp": -0.114,
+      "std_residual_pp": 49.357
+    },
+    {
+      "label": "ACTION_GROUP=jump_shot",
+      "n": 63981,
+      "mean_residual_pp": 0.005,
+      "std_residual_pp": 48.396
+    },
+    {
+      "label": "ACTION_GROUP=other",
+      "n": 0,
+      "mean_residual_pp": NaN,
+      "std_residual_pp": NaN
+    }
+  ],
+  "residuals_by_distance": [
+    {
+      "label": "distance=0-5ft",
+      "n": 62780,
+      "mean_residual_pp": 0.198,
+      "std_residual_pp": 45.387
+    },
+    {
+      "label": "distance=5-15ft",
+      "n": 39985,
+      "mean_residual_pp": -0.009,
+      "std_residual_pp": 49.471
+    },
+    {
+      "label": "distance=15-25ft",
+      "n": 41364,
+      "mean_residual_pp": -0.07,
+      "std_residual_pp": 48.813
+    },
+    {
+      "label": "distance=25+ft",
+      "n": 52069,
+      "mean_residual_pp": -0.186,
+      "std_residual_pp": 47.732
+    }
+  ],
+  "residuals_by_period": [
+    {
+      "label": "PERIOD=1",
+      "n": 56842,
+      "mean_residual_pp": 0.426,
+      "std_residual_pp": 47.742
+    },
+    {
+      "label": "PERIOD=2",
+      "n": 54854,
+      "mean_residual_pp": -0.443,
+      "std_residual_pp": 47.469
+    },
+    {
+      "label": "PERIOD=3",
+      "n": 54379,
+      "mean_residual_pp": 0.319,
+      "std_residual_pp": 47.521
+    },
+    {
+      "label": "PERIOD=4",
+      "n": 30123,
+      "mean_residual_pp": -0.59,
+      "std_residual_pp": 47.642
+    }
+  ],
+  "trees_per_fold": [
+    140,
+    170,
+    170,
+    168,
+    167
+  ],
+  "best_config": {
+    "max_depth": 6,
+    "learning_rate": 0.03,
+    "min_child_weight": 50,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "reg_lambda": 3.0
+  }
+}
