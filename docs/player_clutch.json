@@ -1,0 +1,53 @@
+{
+  "meta": {
+    "description": "Player-level clutch differential analysis (Phase 3b Step 6). d_p = (mean Model A clutch residual) - (mean Model A regular-play residual) for players with at least 30 clutch shots. Between-player variance tau_d2 estimated via DerSimonian-Laird using binomial sampling variances.",
+    "min_clutch_shots": 30,
+    "reporting_rule": "Individual players are listed ONLY if the unbiased 95% interval for tau_d strictly excludes zero. Otherwise no player is named or ranked.",
+    "methodological_note": "Naive game-level cluster bootstrap for tau_d is strongly upward-biased (bootstrap median 7.332 pp vs observed 2.507 pp) because resampling games resamples shots within fixed players, doubling within-player binomial sampling variance while DL subtracts only one copy. Both the exact Q-profile CI [0.000, 5.444] pp and the player-level bootstrap CI [0.000, 5.112] pp include zero, agreeing with Cochran's Q = 84.64 on df = 75 (p = 0.2090)."
+  },
+  "summary": {
+    "n_eligible_players": 76,
+    "median_se_d_p_pp": 7.39,
+    "dbar_pp": -2.803,
+    "dbar_game_ci_lower_pp": -4.646,
+    "dbar_game_ci_upper_pp": -1.503,
+    "cochran_Q": 84.644,
+    "df": 75,
+    "cochran_Q_p_value": 0.209,
+    "i_squared_pct": 11.39,
+    "tau_d2": 0.00062862514953344,
+    "tau_d_pp": 2.507,
+    "q_profile_ci_lower_pp": 0.0,
+    "q_profile_ci_upper_pp": 5.444,
+    "player_boot_ci_lower_pp": 0.0,
+    "player_boot_ci_upper_pp": 5.112,
+    "avg_shrinkage_factor": 0.1127
+  },
+  "q_profile": {
+    "tau_d_ci_lower_pp": 0.0,
+    "tau_d_ci_upper_pp": 5.444,
+    "cochran_Q_p_value": 0.209
+  },
+  "player_bootstrap": {
+    "n_resamples": 2000,
+    "rng_seed": 42,
+    "tau_d_ci_lower_pp": 0.0,
+    "tau_d_ci_upper_pp": 5.112,
+    "tau_d_boot_median_pp": 2.303,
+    "frac_boot_zero": 0.286
+  },
+  "game_bootstrap_diagnostic": {
+    "n_resamples": 2000,
+    "rng_seed": 42,
+    "n_games_pool": 1230,
+    "dbar_ci_lower_pp": -4.646,
+    "dbar_ci_upper_pp": -1.503,
+    "mean_eligible_players_per_draw": 77.5,
+    "naive_game_boot_tau_d_ci_lower_pp": 5.418,
+    "naive_game_boot_tau_d_ci_upper_pp": 9.282,
+    "naive_game_boot_tau_d_median_pp": 7.332,
+    "naive_game_boot_bias_warning": "Naive game-level bootstrap of tau_d is strongly upward-biased because resampling games resamples shots within fixed players, doubling within-player sampling variance while DerSimonian-Laird subtracts only one copy. Use the Q-profile and player-bootstrap intervals for inference on tau_d."
+  },
+  "heterogeneity_detectable": false,
+  "reporting_outcome": "No player-level heterogeneity in clutch performance is detectable at this sample size (Q-profile 95% CI [0.000, 5.444] pp; player-bootstrap 95% CI [0.000, 5.112] pp; Cochran's Q = 84.64 on df = 75, p = 0.2090). Per the pre-specified reporting rule, no individual players are named or ranked."
+}
