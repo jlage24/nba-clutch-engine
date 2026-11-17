@@ -1,0 +1,457 @@
+{
+  "meta": {
+    "estimand": "Clutch residual: observed FG% minus expected FG% from a shot-quality model fitted only on regular-play shots, in percentage points. Positive = observed > expected; negative = observed < expected. This is a descriptive quantity; it bundles defensive intensity, fatigue, shot selection within type, shooter composition, and any other difference between clutch and regular play.",
+    "baseline_fitted_on": "REGULAR shots only (196,198 shots)",
+    "clutch_outcomes_in_baseline": false,
+    "n_bootstrap": 2000,
+    "bootstrap_method": "game-level cluster bootstrap (resample GAME_IDs), 95% percentile CI",
+    "rng_seed": 42,
+    "resolution_limit_note": "Binomial noise alone gives SE ~0.6 pp overall, ~0.8 pp for 2PT, ~0.9 pp for 3PT. Effects smaller than ~1.5\u20132 pp cannot be resolved.",
+    "model_B_uncertainty_note": "Player offsets (b_player) are treated as fixed in the bootstrap. This slightly understates Model B uncertainty."
+  },
+  "descriptive_table": [
+    {
+      "label": "REGULAR 2PT",
+      "n_shots": 114888,
+      "obs_fg_pct": 54.994,
+      "mean_p_A": 54.917,
+      "mean_p_B": 55.1
+    },
+    {
+      "label": "REGULAR 3PT",
+      "n_shots": 81310,
+      "obs_fg_pct": 36.387,
+      "mean_p_A": 36.501,
+      "mean_p_B": 36.654
+    },
+    {
+      "label": "LATE_BLOWOUT 2PT",
+      "n_shots": 9056,
+      "obs_fg_pct": 56.648,
+      "mean_p_A": 56.454,
+      "mean_p_B": 56.22
+    },
+    {
+      "label": "LATE_BLOWOUT 3PT",
+      "n_shots": 6802,
+      "obs_fg_pct": 32.667,
+      "mean_p_A": 36.293,
+      "mean_p_B": 36.181
+    },
+    {
+      "label": "CLUTCH 2PT",
+      "n_shots": 4246,
+      "obs_fg_pct": 51.79,
+      "mean_p_A": 53.652,
+      "mean_p_B": 54.16
+    },
+    {
+      "label": "CLUTCH 3PT",
+      "n_shots": 2858,
+      "obs_fg_pct": 31.805,
+      "mean_p_A": 36.182,
+      "mean_p_B": 36.766
+    }
+  ],
+  "primary_result": {
+    "description": "Overall clutch residual under Model B (primary estimand)",
+    "model_B": {
+      "label": "CLUTCH overall",
+      "n_shots": 7104,
+      "n_games": 543,
+      "obs_fg_pct": 43.75,
+      "exp_fg_pct": 47.162,
+      "residual_pp": -3.412,
+      "ci_lower_pp": -4.461,
+      "ci_upper_pp": -2.48
+    },
+    "model_A": {
+      "label": "CLUTCH overall",
+      "n_shots": 7104,
+      "n_games": 543,
+      "obs_fg_pct": 43.75,
+      "exp_fg_pct": 46.624,
+      "residual_pp": -2.874,
+      "ci_lower_pp": -3.921,
+      "ci_upper_pp": -1.84
+    }
+  },
+  "secondary": {
+    "clutch_by_shot_value": {
+      "model_A": [
+        {
+          "label": "CLUTCH 2PT",
+          "n_shots": 4246,
+          "n_games": 519,
+          "obs_fg_pct": 51.79,
+          "exp_fg_pct": 53.652,
+          "residual_pp": -1.862,
+          "ci_lower_pp": -3.275,
+          "ci_upper_pp": -0.468
+        },
+        {
+          "label": "CLUTCH 3PT",
+          "n_shots": 2858,
+          "n_games": 501,
+          "obs_fg_pct": 31.805,
+          "exp_fg_pct": 36.182,
+          "residual_pp": -4.377,
+          "ci_lower_pp": -6.109,
+          "ci_upper_pp": -2.714
+        }
+      ],
+      "model_B": [
+        {
+          "label": "CLUTCH 2PT",
+          "n_shots": 4246,
+          "n_games": 519,
+          "obs_fg_pct": 51.79,
+          "exp_fg_pct": 54.16,
+          "residual_pp": -2.37,
+          "ci_lower_pp": -3.76,
+          "ci_upper_pp": -1.044
+        },
+        {
+          "label": "CLUTCH 3PT",
+          "n_shots": 2858,
+          "n_games": 501,
+          "obs_fg_pct": 31.805,
+          "exp_fg_pct": 36.766,
+          "residual_pp": -4.961,
+          "ci_lower_pp": -6.609,
+          "ci_upper_pp": -3.235
+        }
+      ]
+    },
+    "late_blowout_control": {
+      "description": "If clutch and late-blowout residuals look alike, the effect is more consistent with a 'late in the game' effect than a 'close game' effect.",
+      "model_A": {
+        "overall": {
+          "label": "LATE_BLOWOUT overall",
+          "n_shots": 15858,
+          "n_games": 1124,
+          "obs_fg_pct": 46.361,
+          "exp_fg_pct": 47.806,
+          "residual_pp": -1.445,
+          "ci_lower_pp": -2.166,
+          "ci_upper_pp": -0.75
+        },
+        "by_shot_value": [
+          {
+            "label": "LATE_BLOWOUT 2PT (Model A)",
+            "n_shots": 9056,
+            "n_games": 1083,
+            "obs_fg_pct": 56.648,
+            "exp_fg_pct": 56.454,
+            "residual_pp": 0.194,
+            "ci_lower_pp": -0.753,
+            "ci_upper_pp": 1.166
+          },
+          {
+            "label": "LATE_BLOWOUT 3PT (Model A)",
+            "n_shots": 6802,
+            "n_games": 1086,
+            "obs_fg_pct": 32.667,
+            "exp_fg_pct": 36.293,
+            "residual_pp": -3.626,
+            "ci_lower_pp": -4.701,
+            "ci_upper_pp": -2.564
+          }
+        ]
+      },
+      "model_B": {
+        "overall": {
+          "label": "LATE_BLOWOUT overall",
+          "n_shots": 15858,
+          "n_games": 1124,
+          "obs_fg_pct": 46.361,
+          "exp_fg_pct": 47.624,
+          "residual_pp": -1.263,
+          "ci_lower_pp": -1.991,
+          "ci_upper_pp": -0.563
+        },
+        "by_shot_value": [
+          {
+            "label": "LATE_BLOWOUT 2PT (Model B)",
+            "n_shots": 9056,
+            "n_games": 1083,
+            "obs_fg_pct": 56.648,
+            "exp_fg_pct": 56.22,
+            "residual_pp": 0.428,
+            "ci_lower_pp": -0.559,
+            "ci_upper_pp": 1.443
+          },
+          {
+            "label": "LATE_BLOWOUT 3PT (Model B)",
+            "n_shots": 6802,
+            "n_games": 1086,
+            "obs_fg_pct": 32.667,
+            "exp_fg_pct": 36.181,
+            "residual_pp": -3.514,
+            "ci_lower_pp": -4.56,
+            "ci_upper_pp": -2.473
+          }
+        ]
+      }
+    },
+    "regular_residual_by_period": {
+      "description": "REGULAR out-of-fold residual by period (Q1\u2013Q4). Period 4 contains only the first 55 min of Q4 (clutch and late-blowout shots in the last 5 min are excluded). Hypothesis (not stated as fact): the alternating sign (+Q1, -Q2, +Q3, -Q4) may reflect shooter-quality composition \u2014 starters play more in Q1/Q3 and bench players more in Q2/Q4 \u2014 which Model B should partly absorb.",
+      "model_A": [
+        {
+          "label": "Q1",
+          "n_shots": 56842,
+          "n_games": 1230,
+          "obs_fg_pct": 47.484,
+          "exp_fg_pct": 47.059,
+          "residual_pp": 0.426,
+          "ci_lower_pp": 0.026,
+          "ci_upper_pp": 0.852
+        },
+        {
+          "label": "Q2",
+          "n_shots": 54854,
+          "n_games": 1230,
+          "obs_fg_pct": 46.934,
+          "exp_fg_pct": 47.376,
+          "residual_pp": -0.443,
+          "ci_lower_pp": -0.84,
+          "ci_upper_pp": -0.028
+        },
+        {
+          "label": "Q3",
+          "n_shots": 54379,
+          "n_games": 1230,
+          "obs_fg_pct": 47.765,
+          "exp_fg_pct": 47.445,
+          "residual_pp": 0.319,
+          "ci_lower_pp": -0.108,
+          "ci_upper_pp": 0.739
+        },
+        {
+          "label": "Q4",
+          "n_shots": 30123,
+          "n_games": 1230,
+          "obs_fg_pct": 46.665,
+          "exp_fg_pct": 47.256,
+          "residual_pp": -0.59,
+          "ci_lower_pp": -1.147,
+          "ci_upper_pp": -0.019
+        }
+      ],
+      "model_B": [
+        {
+          "label": "Q1",
+          "n_shots": 56842,
+          "n_games": 1230,
+          "obs_fg_pct": 47.484,
+          "exp_fg_pct": 47.295,
+          "residual_pp": 0.189,
+          "ci_lower_pp": -0.209,
+          "ci_upper_pp": 0.605
+        },
+        {
+          "label": "Q2",
+          "n_shots": 54854,
+          "n_games": 1230,
+          "obs_fg_pct": 46.934,
+          "exp_fg_pct": 47.505,
+          "residual_pp": -0.571,
+          "ci_lower_pp": -0.977,
+          "ci_upper_pp": -0.157
+        },
+        {
+          "label": "Q3",
+          "n_shots": 54379,
+          "n_games": 1230,
+          "obs_fg_pct": 47.765,
+          "exp_fg_pct": 47.676,
+          "residual_pp": 0.088,
+          "ci_lower_pp": -0.309,
+          "ci_upper_pp": 0.515
+        },
+        {
+          "label": "Q4",
+          "n_shots": 30123,
+          "n_games": 1230,
+          "obs_fg_pct": 46.665,
+          "exp_fg_pct": 47.268,
+          "residual_pp": -0.602,
+          "ci_lower_pp": -1.169,
+          "ci_upper_pp": -0.068
+        }
+      ]
+    },
+    "regular_residual_by_shot_value": {
+      "description": "REGULAR out-of-fold residual by SHOT_VALUE under Model A and Model B.",
+      "model_A": [
+        {
+          "label": "2PT",
+          "n_shots": 114888,
+          "n_games": 1230,
+          "obs_fg_pct": 54.994,
+          "exp_fg_pct": 54.917,
+          "residual_pp": 0.077,
+          "ci_lower_pp": -0.265,
+          "ci_upper_pp": 0.403
+        },
+        {
+          "label": "3PT",
+          "n_shots": 81310,
+          "n_games": 1230,
+          "obs_fg_pct": 36.387,
+          "exp_fg_pct": 36.501,
+          "residual_pp": -0.114,
+          "ci_lower_pp": -0.428,
+          "ci_upper_pp": 0.215
+        }
+      ],
+      "model_B": [
+        {
+          "label": "2PT",
+          "n_shots": 114888,
+          "n_games": 1230,
+          "obs_fg_pct": 54.994,
+          "exp_fg_pct": 55.1,
+          "residual_pp": -0.106,
+          "ci_lower_pp": -0.461,
+          "ci_upper_pp": 0.25
+        },
+        {
+          "label": "3PT",
+          "n_shots": 81310,
+          "n_games": 1230,
+          "obs_fg_pct": 36.387,
+          "exp_fg_pct": 36.654,
+          "residual_pp": -0.267,
+          "ci_lower_pp": -0.612,
+          "ci_upper_pp": 0.059
+        }
+      ]
+    },
+    "player_heterogeneity": {
+      "n_players": 413,
+      "weighted_mean_diff_pp": -2.874,
+      "weighted_sd_diff_pp": 11.61,
+      "sd_ci_lower_pp": 13.984,
+      "sd_ci_upper_pp": 15.799,
+      "note": "Full player-level analysis (Step 6) will apply DerSimonian-Laird shrinkage and report individual players only if tau_d CI excludes zero."
+    }
+  },
+  "exploratory": {
+    "warning": "The following results are exploratory and were not pre-specified. Do not use significance language for these cuts.",
+    "clutch_by_time_bucket": {
+      "description": "Clutch residual by time remaining in the clutch window (<=300 s).",
+      "model_A": [
+        {
+          "label": "last_60s",
+          "n_shots": 1792,
+          "n_games": 405,
+          "obs_fg_pct": 40.29,
+          "exp_fg_pct": 46.211,
+          "residual_pp": -5.921,
+          "ci_lower_pp": -7.814,
+          "ci_upper_pp": -3.851
+        },
+        {
+          "label": "60_180s",
+          "n_shots": 2714,
+          "n_games": 458,
+          "obs_fg_pct": 45.689,
+          "exp_fg_pct": 46.94,
+          "residual_pp": -1.251,
+          "ci_lower_pp": -2.88,
+          "ci_upper_pp": 0.445
+        },
+        {
+          "label": "180_300s",
+          "n_shots": 2598,
+          "n_games": 458,
+          "obs_fg_pct": 44.111,
+          "exp_fg_pct": 46.579,
+          "residual_pp": -2.468,
+          "ci_lower_pp": -4.101,
+          "ci_upper_pp": -0.755
+        }
+      ],
+      "model_B": [
+        {
+          "label": "last_60s",
+          "n_shots": 1792,
+          "n_games": 405,
+          "obs_fg_pct": 40.29,
+          "exp_fg_pct": 46.89,
+          "residual_pp": -6.6,
+          "ci_lower_pp": -8.56,
+          "ci_upper_pp": -4.584
+        },
+        {
+          "label": "60_180s",
+          "n_shots": 2714,
+          "n_games": 458,
+          "obs_fg_pct": 45.689,
+          "exp_fg_pct": 47.452,
+          "residual_pp": -1.763,
+          "ci_lower_pp": -3.42,
+          "ci_upper_pp": -0.141
+        },
+        {
+          "label": "180_300s",
+          "n_shots": 2598,
+          "n_games": 458,
+          "obs_fg_pct": 44.111,
+          "exp_fg_pct": 47.048,
+          "residual_pp": -2.937,
+          "ci_lower_pp": -4.6,
+          "ci_upper_pp": -1.181
+        }
+      ]
+    },
+    "clutch_home_vs_away": {
+      "description": "Clutch residual split by home vs away shooter.",
+      "model_A": [
+        {
+          "label": "home",
+          "n_shots": 3564,
+          "n_games": 512,
+          "obs_fg_pct": 45.398,
+          "exp_fg_pct": 46.971,
+          "residual_pp": -1.573,
+          "ci_lower_pp": -3.118,
+          "ci_upper_pp": 0.055
+        },
+        {
+          "label": "away",
+          "n_shots": 3540,
+          "n_games": 509,
+          "obs_fg_pct": 42.09,
+          "exp_fg_pct": 46.274,
+          "residual_pp": -4.184,
+          "ci_lower_pp": -5.598,
+          "ci_upper_pp": -2.679
+        }
+      ],
+      "model_B": [
+        {
+          "label": "home",
+          "n_shots": 3564,
+          "n_games": 512,
+          "obs_fg_pct": 45.398,
+          "exp_fg_pct": 47.44,
+          "residual_pp": -2.041,
+          "ci_lower_pp": -3.606,
+          "ci_upper_pp": -0.47
+        },
+        {
+          "label": "away",
+          "n_shots": 3540,
+          "n_games": 509,
+          "obs_fg_pct": 42.09,
+          "exp_fg_pct": 46.883,
+          "residual_pp": -4.793,
+          "ci_lower_pp": -6.212,
+          "ci_upper_pp": -3.322
+        }
+      ]
+    }
+  }
+}
