@@ -1,0 +1,326 @@
+{
+  "meta": {
+    "description": "Out-of-fold predictive comparison on all 7,104 CLUTCH shots across 543 games using the fixed 5-fold game-level fold assignment.",
+    "n_clutch_shots": 7104,
+    "n_clutch_games": 543,
+    "n_bootstrap": 2000,
+    "rng_seed": 42,
+    "step_7_exception": "For Step 7 ONLY, clutch outcomes from folds != k are used to estimate the constant logit-scale shift delta_k in 'Model B + clutch shift' and to fit the 'Clutch-only XGBoost' benchmark. Fold-k clutch outcomes are NEVER used for fold-k predictions. Model A and Model B themselves remain fitted exclusively on REGULAR shots.",
+    "phase3_artifacts_loaded": false,
+    "phase3_hyperparameters_used": {
+      "max_depth": 3,
+      "learning_rate": 0.05,
+      "min_child_weight": 25,
+      "subsample": 0.8,
+      "colsample_bytree": 0.8,
+      "reg_lambda": 3.0
+    },
+    "phase3_features_used": [
+      "TIME_REMAINING_SEC",
+      "SCORE_MARGIN",
+      "SHOT_DISTANCE_FT",
+      "SHOT_ANGLE",
+      "LOC_X",
+      "LOC_Y",
+      "SHOT_VALUE",
+      "IS_OT",
+      "IS_HOME",
+      "IS_PUTBACK",
+      "ACTION_GROUP"
+    ]
+  },
+  "model_b_shift_folds": [
+    {
+      "fold": 0,
+      "n_train_clutch": 5698,
+      "n_val_clutch": 1406,
+      "delta_logit": -0.15196
+    },
+    {
+      "fold": 1,
+      "n_train_clutch": 5682,
+      "n_val_clutch": 1422,
+      "delta_logit": -0.15879
+    },
+    {
+      "fold": 2,
+      "n_train_clutch": 5681,
+      "n_val_clutch": 1423,
+      "delta_logit": -0.1459
+    },
+    {
+      "fold": 3,
+      "n_train_clutch": 5797,
+      "n_val_clutch": 1307,
+      "delta_logit": -0.14875
+    },
+    {
+      "fold": 4,
+      "n_train_clutch": 5558,
+      "n_val_clutch": 1546,
+      "delta_logit": -0.14794
+    }
+  ],
+  "clutch_only_xgb_folds": [
+    {
+      "fold": 0,
+      "n_train_clutch": 5698,
+      "n_val_clutch": 1406,
+      "n_trees": 103
+    },
+    {
+      "fold": 1,
+      "n_train_clutch": 5682,
+      "n_val_clutch": 1422,
+      "n_trees": 73
+    },
+    {
+      "fold": 2,
+      "n_train_clutch": 5681,
+      "n_val_clutch": 1423,
+      "n_trees": 96
+    },
+    {
+      "fold": 3,
+      "n_train_clutch": 5797,
+      "n_val_clutch": 1307,
+      "n_trees": 116
+    },
+    {
+      "fold": 4,
+      "n_train_clutch": 5558,
+      "n_val_clutch": 1546,
+      "n_trees": 128
+    }
+  ],
+  "individual_metrics": {
+    "Model A (regular shot-only)": {
+      "brier": {
+        "point": 0.221037,
+        "ci_lower": 0.217883,
+        "ci_upper": 0.224025,
+        "std_err": 0.001543
+      },
+      "log_loss": {
+        "point": 0.631253,
+        "ci_lower": 0.624236,
+        "ci_upper": 0.637668,
+        "std_err": 0.003423
+      },
+      "roc_auc": {
+        "point": 0.672851,
+        "ci_lower": 0.660022,
+        "ci_upper": 0.686431,
+        "std_err": 0.00673
+      },
+      "ece_point": 0.035653,
+      "mean_residual_pp": -2.874
+    },
+    "Model B (regular + shooter)": {
+      "brier": {
+        "point": 0.220896,
+        "ci_lower": 0.217885,
+        "ci_upper": 0.22383,
+        "std_err": 0.001522
+      },
+      "log_loss": {
+        "point": 0.630889,
+        "ci_lower": 0.624269,
+        "ci_upper": 0.637317,
+        "std_err": 0.003362
+      },
+      "roc_auc": {
+        "point": 0.674285,
+        "ci_lower": 0.660798,
+        "ci_upper": 0.687531,
+        "std_err": 0.00683
+      },
+      "ece_point": 0.034124,
+      "mean_residual_pp": -3.412
+    },
+    "Model B + clutch shift": {
+      "brier": {
+        "point": 0.219701,
+        "ci_lower": 0.216488,
+        "ci_upper": 0.222935,
+        "std_err": 0.00166
+      },
+      "log_loss": {
+        "point": 0.628346,
+        "ci_lower": 0.621142,
+        "ci_upper": 0.635416,
+        "std_err": 0.003612
+      },
+      "roc_auc": {
+        "point": 0.674268,
+        "ci_lower": 0.660732,
+        "ci_upper": 0.687595,
+        "std_err": 0.006822
+      },
+      "ece_point": 0.019743,
+      "mean_residual_pp": -0.001
+    },
+    "Clutch-only XGBoost (Phase 3)": {
+      "brier": {
+        "point": 0.220845,
+        "ci_lower": 0.217413,
+        "ci_upper": 0.224239,
+        "std_err": 0.001726
+      },
+      "log_loss": {
+        "point": 0.63094,
+        "ci_lower": 0.623412,
+        "ci_upper": 0.638243,
+        "std_err": 0.00378
+      },
+      "roc_auc": {
+        "point": 0.667998,
+        "ci_lower": 0.655588,
+        "ci_upper": 0.680458,
+        "std_err": 0.00638
+      },
+      "ece_point": 0.012449,
+      "mean_residual_pp": -0.032
+    }
+  },
+  "paired_differences": {
+    "Model B (regular + shooter) minus Model A (regular shot-only)": {
+      "brier": {
+        "point_diff": -0.000142,
+        "ci_lower": -0.000776,
+        "ci_upper": 0.000474,
+        "std_err": 0.000318,
+        "p_boot_display": "0.6960"
+      },
+      "log_loss": {
+        "point_diff": -0.000364,
+        "ci_lower": -0.001734,
+        "ci_upper": 0.001007,
+        "std_err": 0.000696,
+        "p_boot_display": "0.6240"
+      },
+      "roc_auc": {
+        "point_diff": 0.001434,
+        "ci_lower": -0.00312,
+        "ci_upper": 0.006113,
+        "std_err": 0.002316,
+        "p_boot_display": "0.5640"
+      }
+    },
+    "Model B + clutch shift minus Model A (regular shot-only)": {
+      "brier": {
+        "point_diff": -0.001336,
+        "ci_lower": -0.002175,
+        "ci_upper": -0.000491,
+        "std_err": 0.000424,
+        "p_boot_display": "0.0020"
+      },
+      "log_loss": {
+        "point_diff": -0.002907,
+        "ci_lower": -0.004748,
+        "ci_upper": -0.001034,
+        "std_err": 0.000936,
+        "p_boot_display": "0.0010"
+      },
+      "roc_auc": {
+        "point_diff": 0.001417,
+        "ci_lower": -0.003172,
+        "ci_upper": 0.006094,
+        "std_err": 0.002318,
+        "p_boot_display": "0.5620"
+      }
+    },
+    "Model B + clutch shift minus Model B (regular + shooter)": {
+      "brier": {
+        "point_diff": -0.001195,
+        "ci_lower": -0.001923,
+        "ci_upper": -0.000479,
+        "std_err": 0.000361,
+        "p_boot_display": "< 0.0005"
+      },
+      "log_loss": {
+        "point_diff": -0.002543,
+        "ci_lower": -0.004078,
+        "ci_upper": -0.001013,
+        "std_err": 0.000773,
+        "p_boot_display": "< 0.0005"
+      },
+      "roc_auc": {
+        "point_diff": -1.7e-05,
+        "ci_lower": -0.000184,
+        "ci_upper": 0.000152,
+        "std_err": 8.6e-05,
+        "p_boot_display": "0.8380"
+      }
+    },
+    "Model B + clutch shift minus Clutch-only XGBoost (Phase 3)": {
+      "brier": {
+        "point_diff": -0.001145,
+        "ci_lower": -0.002213,
+        "ci_upper": 2.1e-05,
+        "std_err": 0.000576,
+        "p_boot_display": "0.0540"
+      },
+      "log_loss": {
+        "point_diff": -0.002594,
+        "ci_lower": -0.005025,
+        "ci_upper": 9e-06,
+        "std_err": 0.001289,
+        "p_boot_display": "0.0520"
+      },
+      "roc_auc": {
+        "point_diff": 0.00627,
+        "ci_lower": -0.000888,
+        "ci_upper": 0.013024,
+        "std_err": 0.003486,
+        "p_boot_display": "0.0710"
+      }
+    },
+    "Model B (regular + shooter) minus Clutch-only XGBoost (Phase 3)": {
+      "brier": {
+        "point_diff": 5e-05,
+        "ci_lower": -0.001231,
+        "ci_upper": 0.001403,
+        "std_err": 0.000674,
+        "p_boot_display": "0.8980"
+      },
+      "log_loss": {
+        "point_diff": -5.1e-05,
+        "ci_lower": -0.00293,
+        "ci_upper": 0.002954,
+        "std_err": 0.001498,
+        "p_boot_display": "0.9830"
+      },
+      "roc_auc": {
+        "point_diff": 0.006287,
+        "ci_lower": -0.000863,
+        "ci_upper": 0.012986,
+        "std_err": 0.003481,
+        "p_boot_display": "0.0710"
+      }
+    },
+    "Model A (regular shot-only) minus Clutch-only XGBoost (Phase 3)": {
+      "brier": {
+        "point_diff": 0.000192,
+        "ci_lower": -0.000904,
+        "ci_upper": 0.001235,
+        "std_err": 0.000552,
+        "p_boot_display": "0.7200"
+      },
+      "log_loss": {
+        "point_diff": 0.000313,
+        "ci_lower": -0.002121,
+        "ci_upper": 0.002735,
+        "std_err": 0.001245,
+        "p_boot_display": "0.7780"
+      },
+      "roc_auc": {
+        "point_diff": 0.004853,
+        "ci_lower": -0.000345,
+        "ci_upper": 0.009804,
+        "std_err": 0.002628,
+        "p_boot_display": "0.0660"
+      }
+    }
+  }
+}
