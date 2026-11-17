@@ -1,0 +1,217 @@
+{
+  "status": "sensitivity, not pre-specified",
+  "note": "Sensitivity analyses (not pre-specified). They check robustness of the clutch residual to XGBoost hyperparameters beyond the tuning grid edges (S1) and to a parametric logistic-regression baseline (S2). They do not change the pre-specified primary result.",
+  "reference": {
+    "model_A": {
+      "label": "CLUTCH overall",
+      "n_shots": 7104,
+      "n_games": 543,
+      "obs_fg_pct": 43.75,
+      "exp_fg_pct": 46.624,
+      "residual_pp": -2.874,
+      "ci_lower_pp": -3.921,
+      "ci_upper_pp": -1.84
+    },
+    "model_B": {
+      "label": "CLUTCH overall",
+      "n_shots": 7104,
+      "n_games": 543,
+      "obs_fg_pct": 43.75,
+      "exp_fg_pct": 47.162,
+      "residual_pp": -3.412,
+      "ci_lower_pp": -4.461,
+      "ci_upper_pp": -2.48
+    }
+  },
+  "S1a_beyond_edges": {
+    "regular_oof_metrics": {
+      "model_A": {
+        "brier": 0.2264744772076824,
+        "log_loss": 0.6423732388480764,
+        "roc_auc": 0.6526810747765807,
+        "ece": 0.0026551655374084638
+      },
+      "model_B": {
+        "brier": 0.22580590011852797,
+        "log_loss": 0.6410022708669644,
+        "roc_auc": 0.6568084537014316,
+        "ece": 0.004920523465850271
+      }
+    },
+    "fold_tau_pp": [
+      3.35,
+      3.358,
+      3.285,
+      3.11,
+      3.242
+    ],
+    "clutch_residual_A": {
+      "label": "CLUTCH overall (Model A)",
+      "n_shots": 7104,
+      "n_games": 543,
+      "obs_fg_pct": 43.75,
+      "exp_fg_pct": 46.613,
+      "residual_pp": -2.863,
+      "ci_lower_pp": -3.905,
+      "ci_upper_pp": -1.835
+    },
+    "clutch_residual_B": {
+      "label": "CLUTCH overall (Model B)",
+      "n_shots": 7104,
+      "n_games": 543,
+      "obs_fg_pct": 43.75,
+      "exp_fg_pct": 47.162,
+      "residual_pp": -3.412,
+      "ci_lower_pp": -4.466,
+      "ci_upper_pp": -2.471
+    },
+    "diff_vs_reference_pp": {
+      "model_A": 0.011,
+      "model_B": 0.0
+    },
+    "label": "S1a_beyond_edges",
+    "config": {
+      "max_depth": 6,
+      "learning_rate": 0.02,
+      "min_child_weight": 100,
+      "subsample": 0.8,
+      "colsample_bytree": 0.8,
+      "reg_lambda": 10.0
+    },
+    "trees_per_fold": [
+      274,
+      285,
+      246,
+      319,
+      253
+    ]
+  },
+  "S1b_5th_best": {
+    "regular_oof_metrics": {
+      "model_A": {
+        "brier": 0.2265059472585037,
+        "log_loss": 0.6424343078400269,
+        "roc_auc": 0.652609885754263,
+        "ece": 0.0024364473456110216
+      },
+      "model_B": {
+        "brier": 0.22583016672251763,
+        "log_loss": 0.6410609184624425,
+        "roc_auc": 0.6568116951869172,
+        "ece": 0.004945927894708478
+      }
+    },
+    "fold_tau_pp": [
+      3.364,
+      3.366,
+      3.294,
+      3.127,
+      3.251
+    ],
+    "clutch_residual_A": {
+      "label": "CLUTCH overall (Model A)",
+      "n_shots": 7104,
+      "n_games": 543,
+      "obs_fg_pct": 43.75,
+      "exp_fg_pct": 46.632,
+      "residual_pp": -2.882,
+      "ci_lower_pp": -3.911,
+      "ci_upper_pp": -1.854
+    },
+    "clutch_residual_B": {
+      "label": "CLUTCH overall (Model B)",
+      "n_shots": 7104,
+      "n_games": 543,
+      "obs_fg_pct": 43.75,
+      "exp_fg_pct": 47.176,
+      "residual_pp": -3.426,
+      "ci_lower_pp": -4.469,
+      "ci_upper_pp": -2.495
+    },
+    "diff_vs_reference_pp": {
+      "model_A": -0.008,
+      "model_B": -0.014
+    },
+    "label": "S1b_5th_best",
+    "config": {
+      "max_depth": 4,
+      "learning_rate": 0.06,
+      "min_child_weight": 50,
+      "subsample": 0.8,
+      "colsample_bytree": 0.8,
+      "reg_lambda": 1.0
+    },
+    "trees_per_fold": [
+      123,
+      136,
+      153,
+      136,
+      116
+    ]
+  },
+  "S2_logistic_regression": {
+    "regular_oof_metrics": {
+      "model_A": {
+        "brier": 0.22811389305115887,
+        "log_loss": 0.6467509926886651,
+        "roc_auc": 0.6472042716556282,
+        "ece": 0.01248640456877256
+      },
+      "model_B": {
+        "brier": 0.2274228312820149,
+        "log_loss": 0.64485731794652,
+        "roc_auc": 0.6512558341401318,
+        "ece": 0.010755311204419752
+      }
+    },
+    "fold_tau_pp": [
+      3.351,
+      3.384,
+      3.307,
+      3.142,
+      3.266
+    ],
+    "clutch_residual_A": {
+      "label": "CLUTCH overall (Model A)",
+      "n_shots": 7104,
+      "n_games": 543,
+      "obs_fg_pct": 43.75,
+      "exp_fg_pct": 46.753,
+      "residual_pp": -3.003,
+      "ci_lower_pp": -4.012,
+      "ci_upper_pp": -1.977
+    },
+    "clutch_residual_B": {
+      "label": "CLUTCH overall (Model B)",
+      "n_shots": 7104,
+      "n_games": 543,
+      "obs_fg_pct": 43.75,
+      "exp_fg_pct": 47.295,
+      "residual_pp": -3.545,
+      "ci_lower_pp": -4.576,
+      "ci_upper_pp": -2.579
+    },
+    "diff_vs_reference_pp": {
+      "model_A": -0.129,
+      "model_B": -0.133
+    },
+    "label": "S2_logistic_regression",
+    "features": [
+      "dist",
+      "dist_sq",
+      "dist_cube",
+      "abs_angle",
+      "shot_value",
+      "is_putback",
+      "action_dunk",
+      "action_layup",
+      "action_hook",
+      "action_floater",
+      "action_stepback",
+      "action_pullup",
+      "action_fadeaway",
+      "action_jump_shot",
+      "action_other"
+    ]
+  }
+}
