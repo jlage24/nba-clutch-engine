@@ -82,24 +82,6 @@ def bootstrap_residual(
 
     The residual is ``mean(y - p) * 100`` in percentage points.  The 95%
     percentile interval is from 2,000 game-cluster bootstrap resamples.
-
-    Parameters
-    ----------
-    game_ids:
-        1-D array of game IDs (strings), one per shot.
-    y:
-        Binary outcomes (0/1).
-    p:
-        Predicted probabilities.
-    n_resamples:
-        Number of bootstrap resamples.
-    rng:
-        ``numpy.random.Generator`` instance.  Created from ``RNG_SEED`` if None.
-
-    Returns
-    -------
-    dict with keys: n_shots, n_games, obs_fg_pct, exp_fg_pct, residual_pp,
-    ci_lower_pp, ci_upper_pp.
     """
     if rng is None:
         rng = np.random.default_rng(RNG_SEED)
@@ -125,7 +107,7 @@ def bootstrap_residual(
         "n_shots": n_shots,
         "n_games": n_games,
         "obs_fg_pct": round(obs_fg, 3),
-        "exp_fg_pct_A": round(exp_fg, 3),   # filled by callers for A/B
+        "exp_fg_pct": round(exp_fg, 3),
         "residual_pp": round(point_resid, 3),
         "ci_lower_pp": round(lower, 3),
         "ci_upper_pp": round(upper, 3),
@@ -138,19 +120,7 @@ def _residual_row(
     model_col: str,
     rng: np.random.Generator,
 ) -> Dict[str, Any]:
-    """Compute a single residual row for a subset of `df`.
-
-    Parameters
-    ----------
-    label:
-        Human-readable label for the row.
-    df:
-        Subset of the OOF DataFrame to analyse.
-    model_col:
-        Column name of the predicted probability (``p_A`` or ``p_B``).
-    rng:
-        Shared RNG so that all calls within a function use a common stream.
-    """
+    """Compute a single residual row for a subset of `df`."""
     game_ids = df["GAME_ID"].values.astype(str)
     y = df["SHOT_MADE_FLAG"].values.astype(float)
     p = df[model_col].values.astype(float)
@@ -184,23 +154,80 @@ def _residual_row(
     }
 
 
+def _bootstrap_difference(
+    rng: np.random.Generator,
+    df_all: pd.DataFrame,
+    mask_a: np.ndarray,
+    mask_b: np.ndarray,
+    model_col: str,
+    n_resamples: int = N_BOOT,
+) -> Dict[str, Any]:
+    """Game-level cluster bootstrap CI for difference of residuals (mask_a minus mask_b).
+
+    Resamples whole GAME_IDs with replacement from all games in ``df_all``
+    (preserving the overlap of games that contain both CLUTCH and LATE_BLOWOUT
+    shots).  Vectorized via per-game residual sums and shot counts.
+    """
+    game_ids = df_all["GAME_ID"].values.astype(str)
+    resid = df_all["SHOT_MADE_FLAG"].values.astype(float) - df_all[model_col].values.astype(float)
+
+    df_game = pd.DataFrame({
+        "game": game_ids,
+        "sum_a": np.where(mask_a, resid, 0.0),
+        "n_a": mask_a.astype(np.int64),
+        "sum_b": np.where(mask_b, resid, 0.0),
+        "n_b": mask_b.astype(np.int64),
+    })
+    agg = df_game.groupby("game", sort=True).sum()
+
+    sum_a = agg["sum_a"].values
+    n_a = agg["n_a"].values
+    sum_b = agg["sum_b"].values
+    n_b = agg["n_b"].values
+    n_games = len(agg)
+
+    point_a = (sum_a.sum() / n_a.sum()) * 100.0
+    point_b = (sum_b.sum() / n_b.sum()) * 100.0
+    point_diff = point_a - point_b
+
+    sampled = rng.choice(n_games, size=(n_resamples, n_games), replace=True)
+    tot_n_a = n_a[sampled].sum(axis=1)
+    tot_n_b = n_b[sampled].sum(axis=1)
+    boot_a = (sum_a[sampled].sum(axis=1) / tot_n_a) * 100.0
+    boot_b = (sum_b[sampled].sum(axis=1) / tot_n_b) * 100.0
+    boot_diffs = boot_a - boot_b
+
+    lower = float(np.percentile(boot_diffs, 100 * ALPHA / 2))
+    upper = float(np.percentile(boot_diffs, 100 * (1 - ALPHA / 2)))
+
+    return {
+        "n_shots_clutch": int(n_a.sum()),
+        "n_shots_late_blowout": int(n_b.sum()),
+        "n_games_pool": int(n_games),
+        "point_diff_pp": round(float(point_diff), 3),
+        "ci_lower_pp": round(lower, 3),
+        "ci_upper_pp": round(upper, 3),
+    }
+
+
 # ---------------------------------------------------------------------------
-# Descriptive table helper (no bootstrap needed)
+# Descriptive table helper (now includes mean b_player)
 # ---------------------------------------------------------------------------
 
 def _desc_row(label: str, df: pd.DataFrame) -> Dict[str, Any]:
-    """Return a descriptive row: n_shots, obs_fg_pct, mean_p_A, mean_p_B."""
+    """Return a descriptive row: n_shots, obs_fg_pct, mean_p_A, mean_p_B, mean_b_player."""
     return {
         "label": label,
         "n_shots": int(len(df)),
         "obs_fg_pct": round(float(df["SHOT_MADE_FLAG"].mean()) * 100, 3),
         "mean_p_A": round(float(df["p_A"].mean()) * 100, 3),
         "mean_p_B": round(float(df["p_B"].mean()) * 100, 3),
+        "mean_b_player_pp": round(float(df["b_player"].mean()) * 100, 3),
     }
 
 
 def build_descriptive_table(oof: pd.DataFrame) -> List[Dict[str, Any]]:
-    """For each set × SHOT_VALUE combination: n_shots, obs FG%, mean p_A, mean p_B."""
+    """For each set × SHOT_VALUE combination: n_shots, obs FG%, mean p_A, mean p_B, mean b_player."""
     rows = []
     for sl in ["REGULAR", "LATE_BLOWOUT", "CLUTCH"]:
         for sv in [2, 3]:
@@ -218,35 +245,19 @@ def plot_forest(
     rows_B: List[Dict[str, Any]],
     save_path: Path,
 ) -> None:
-    """Draw a horizontal forest plot of residuals (pp) with 95% CI.
-
-    Shows CLUTCH (overall, 2PT, 3PT) and LATE_BLOWOUT (overall) for both
-    Model A and Model B.
-
-    Parameters
-    ----------
-    rows_A:
-        List of result dicts for Model A.
-    rows_B:
-        Matching list for Model B (same order).
-    save_path:
-        Output file path.
-    """
+    """Draw a horizontal forest plot of residuals (pp) with 95% CI."""
     labels = [r["label"] for r in rows_A]
     n = len(labels)
 
     fig, ax = plt.subplots(figsize=(9, 1.2 + 0.7 * n))
-
     y_positions = np.arange(n)
 
     for i, (ra, rb) in enumerate(zip(rows_A, rows_B)):
         y_a = y_positions[i] + 0.15
         y_b = y_positions[i] - 0.15
-        # Model A
         ax.plot(ra["residual_pp"], y_a, "o", color="#1f77b4", markersize=7, zorder=4)
         ax.hlines(y_a, ra["ci_lower_pp"], ra["ci_upper_pp"],
                   color="#1f77b4", linewidth=2, zorder=3)
-        # Model B
         ax.plot(rb["residual_pp"], y_b, "s", color="#ff7f0e", markersize=7, zorder=4)
         ax.hlines(y_b, rb["ci_lower_pp"], rb["ci_upper_pp"],
                   color="#ff7f0e", linewidth=2, zorder=3)
@@ -262,14 +273,14 @@ def plot_forest(
     )
     ax.grid(True, axis="x", linestyle=":", alpha=0.5)
 
-    # Legend
     from matplotlib.lines import Line2D
     handles = [
-        Line2D([0], [0], color="#1f77b4", marker="o", linewidth=2, markersize=7, label="Model A (shot quality)"),
-        Line2D([0], [0], color="#ff7f0e", marker="s", linewidth=2, markersize=7, label="Model B (shot + shooter skill)"),
+        Line2D([0], [0], color="#1f77b4", marker="o", linewidth=2, markersize=7,
+               label="Model A (shot quality)"),
+        Line2D([0], [0], color="#ff7f0e", marker="s", linewidth=2, markersize=7,
+               label="Model B (shot + shooter skill)"),
     ]
-    ax.legend(handles=handles, loc="lower right", fontsize=10)
-
+    ax.legend(handles=handles, loc="upper left", fontsize=10)
     plt.tight_layout()
     fig.savefig(save_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -285,17 +296,7 @@ def plot_residual_by_period(
     period_rows_B: List[Dict[str, Any]],
     save_path: Path,
 ) -> None:
-    """Bar chart of REGULAR OOF residual by period with 95% CI error bars.
-
-    Parameters
-    ----------
-    period_rows_A:
-        List of dicts (label, residual_pp, ci_lower_pp, ci_upper_pp) for Model A.
-    period_rows_B:
-        Same for Model B.
-    save_path:
-        Output file path.
-    """
+    """Bar chart of REGULAR OOF residual by period with 95% CI error bars."""
     labels = [r["label"] for r in period_rows_A]
     x = np.arange(len(labels))
     width = 0.35
@@ -309,19 +310,12 @@ def plot_residual_by_period(
     err_high_B = np.array([r["ci_upper_pp"] for r in period_rows_B]) - residuals_B
 
     fig, ax = plt.subplots(figsize=(9, 5))
-
-    bars_A = ax.bar(
-        x - width / 2, residuals_A, width,
-        yerr=[err_low_A, err_high_A],
-        capsize=5, color="#1f77b4", alpha=0.8, label="Model A",
-        error_kw={"linewidth": 1.5},
-    )
-    bars_B = ax.bar(
-        x + width / 2, residuals_B, width,
-        yerr=[err_low_B, err_high_B],
-        capsize=5, color="#ff7f0e", alpha=0.8, label="Model B",
-        error_kw={"linewidth": 1.5},
-    )
+    ax.bar(x - width / 2, residuals_A, width,
+           yerr=[err_low_A, err_high_A], capsize=5, color="#1f77b4",
+           alpha=0.8, label="Model A", error_kw={"linewidth": 1.5})
+    ax.bar(x + width / 2, residuals_B, width,
+           yerr=[err_low_B, err_high_B], capsize=5, color="#ff7f0e",
+           alpha=0.8, label="Model B", error_kw={"linewidth": 1.5})
 
     ax.axhline(0, color="black", linewidth=1.0, linestyle="--")
     ax.set_xticks(x)
@@ -329,12 +323,11 @@ def plot_residual_by_period(
     ax.set_ylabel("Residual (observed − expected FG%, pp)", fontsize=11)
     ax.set_title(
         "REGULAR out-of-fold residual by period — Model A and Model B\n"
-        "(period 4 = first 55 min of Q4 only; clutch shots excluded)",
+        "(Q4 = clock > 5:00 only; last 5 min of Q4 and OT excluded)",
         fontsize=11, fontweight="bold",
     )
     ax.legend(fontsize=10)
     ax.grid(True, axis="y", linestyle=":", alpha=0.5)
-
     plt.tight_layout()
     fig.savefig(save_path, dpi=200, bbox_inches="tight")
     plt.close(fig)
@@ -365,33 +358,30 @@ def main() -> None:  # noqa: C901
             "Run src/baseline_model.py (which calls the shooter-offset step) first."
         )
 
-    # Subset shortcuts
     reg = oof[oof["SET_LABEL"] == "REGULAR"].copy()
     clutch = oof[oof["SET_LABEL"] == "CLUTCH"].copy()
     lb = oof[oof["SET_LABEL"] == "LATE_BLOWOUT"].copy()
-
     print(f"    REGULAR: {len(reg):,}  CLUTCH: {len(clutch):,}  LATE_BLOWOUT: {len(lb):,}")
 
-    # Shared RNG — one stream for all bootstrap calls so the sequence is
-    # deterministic regardless of call order.
     rng = np.random.default_rng(RNG_SEED)
 
     # ------------------------------------------------------------------
-    # Descriptive table (no bootstrap): n, obs FG%, mean p_A, mean p_B
-    # per set × SHOT_VALUE (brief request)
+    # Descriptive table (with b_player)
     # ------------------------------------------------------------------
-    print("\n[2] Descriptive table (n, obs FG%, mean p_A, mean p_B) …")
+    print("\n[2] Descriptive table (n, obs FG%, mean p_A, mean p_B, mean b_player) …")
     desc_table = build_descriptive_table(oof)
-    print(f"\n    {'Label':<22} {'n':>8} {'obs FG%':>9} {'mean p_A':>10} {'mean p_B':>10}")
-    print("    " + "-" * 62)
+    print(f"\n    {'Label':<22} {'n':>8} {'obs FG%':>9} {'mean p_A':>10} "
+          f"{'mean p_B':>10} {'b_player':>10}")
+    print("    " + "-" * 72)
     for row in desc_table:
         print(
             f"    {row['label']:<22} {row['n_shots']:>8,} "
-            f"{row['obs_fg_pct']:>9.2f} {row['mean_p_A']:>10.2f} {row['mean_p_B']:>10.2f}"
+            f"{row['obs_fg_pct']:>9.2f} {row['mean_p_A']:>10.2f} "
+            f"{row['mean_p_B']:>10.2f} {row['mean_b_player_pp']:>+10.3f}"
         )
 
     # ------------------------------------------------------------------
-    # Pre-specified result 1: overall clutch residual, Model A and B
+    # Primary result: overall clutch residual
     # ------------------------------------------------------------------
     print("\n[3] Primary result: overall clutch residual (Model A and B) …")
     clutch_A_overall = _residual_row("CLUTCH overall (Model A)", clutch, "p_A", rng)
@@ -404,23 +394,21 @@ def main() -> None:  # noqa: C901
           f"n={clutch_B_overall['n_shots']:,}")
 
     # ------------------------------------------------------------------
-    # Pre-specified result 2: by SHOT_VALUE
+    # By SHOT_VALUE
     # ------------------------------------------------------------------
     print("\n[4] Clutch residual by SHOT_VALUE …")
     clutch_2pt = clutch[clutch["SHOT_VALUE"] == 2]
     clutch_3pt = clutch[clutch["SHOT_VALUE"] == 3]
-
     clutch_A_2pt = _residual_row("CLUTCH 2PT (Model A)", clutch_2pt, "p_A", rng)
     clutch_B_2pt = _residual_row("CLUTCH 2PT (Model B)", clutch_2pt, "p_B", rng)
     clutch_A_3pt = _residual_row("CLUTCH 3PT (Model A)", clutch_3pt, "p_A", rng)
     clutch_B_3pt = _residual_row("CLUTCH 3PT (Model B)", clutch_3pt, "p_B", rng)
-
     for row in [clutch_A_2pt, clutch_B_2pt, clutch_A_3pt, clutch_B_3pt]:
         print(f"    {row['label']}: {row['residual_pp']:+.3f} pp  "
               f"95% CI [{row['ci_lower_pp']:+.3f}, {row['ci_upper_pp']:+.3f}]  n={row['n_shots']:,}")
 
     # ------------------------------------------------------------------
-    # Pre-specified result 3: late-blowout control
+    # Late-blowout control
     # ------------------------------------------------------------------
     print("\n[5] Late-blowout control residual …")
     lb_A_overall = _residual_row("LATE_BLOWOUT overall (Model A)", lb, "p_A", rng)
@@ -429,20 +417,43 @@ def main() -> None:  # noqa: C901
     lb_B_2pt = _residual_row("LATE_BLOWOUT 2PT (Model B)", lb[lb["SHOT_VALUE"] == 2], "p_B", rng)
     lb_A_3pt = _residual_row("LATE_BLOWOUT 3PT (Model A)", lb[lb["SHOT_VALUE"] == 3], "p_A", rng)
     lb_B_3pt = _residual_row("LATE_BLOWOUT 3PT (Model B)", lb[lb["SHOT_VALUE"] == 3], "p_B", rng)
-
     for row in [lb_A_overall, lb_B_overall, lb_A_2pt, lb_B_2pt, lb_A_3pt, lb_B_3pt]:
         print(f"    {row['label']}: {row['residual_pp']:+.3f} pp  "
               f"95% CI [{row['ci_lower_pp']:+.3f}, {row['ci_upper_pp']:+.3f}]  n={row['n_shots']:,}")
 
     # ------------------------------------------------------------------
-    # Pre-specified result 4a: REGULAR residual by period (Model A)
-    # (already in baseline_quality.json — we recompute with bootstrap CI
-    #  and add Model B)
+    # CLUTCH minus LATE_BLOWOUT difference (joint game-level cluster bootstrap)
+    # ------------------------------------------------------------------
+    print("\n[5b] CLUTCH minus LATE_BLOWOUT difference (joint game-level bootstrap, seed 42) …")
+    diff_results: Dict[str, Dict[str, Any]] = {}
+    diff_rng = np.random.default_rng(RNG_SEED)
+    is_clutch = (oof["SET_LABEL"] == "CLUTCH").values
+    is_lb = (oof["SET_LABEL"] == "LATE_BLOWOUT").values
+
+    for model_col, model_label in [("p_A", "Model A"), ("p_B", "Model B")]:
+        for sv_label, sv_mask in [
+            ("overall", np.ones(len(oof), dtype=bool)),
+            ("2PT", (oof["SHOT_VALUE"] == 2).values),
+            ("3PT", (oof["SHOT_VALUE"] == 3).values),
+        ]:
+            key = f"{sv_label}_{model_label}"
+            d = _bootstrap_difference(
+                diff_rng,
+                oof,
+                is_clutch & sv_mask,
+                is_lb & sv_mask,
+                model_col,
+            )
+            diff_results[key] = d
+            print(f"    {key}: diff = {d['point_diff_pp']:+.3f} pp  "
+                  f"95% CI [{d['ci_lower_pp']:+.3f}, {d['ci_upper_pp']:+.3f}]")
+
+    # ------------------------------------------------------------------
+    # REGULAR residual by period (Model A and B)
     # ------------------------------------------------------------------
     print("\n[6] REGULAR OOF residual by period — Model A and Model B …")
     period_rows_A: List[Dict[str, Any]] = []
     period_rows_B: List[Dict[str, Any]] = []
-
     for p_val in sorted(reg["PERIOD"].unique()):
         sub = reg[reg["PERIOD"] == p_val]
         label = f"Q{p_val}" if p_val <= 4 else f"OT{p_val - 4}"
@@ -457,8 +468,7 @@ def main() -> None:  # noqa: C901
         )
 
     # ------------------------------------------------------------------
-    # Pre-specified result 4b: REGULAR residual by SHOT_VALUE (Model A and B)
-    # (also requested in follow-up)
+    # REGULAR residual by SHOT_VALUE (Model A and B)
     # ------------------------------------------------------------------
     print("\n[7] REGULAR OOF residual by SHOT_VALUE — Model A and Model B …")
     reg_sv_rows_A: List[Dict[str, Any]] = []
@@ -476,9 +486,7 @@ def main() -> None:  # noqa: C901
         )
 
     # ------------------------------------------------------------------
-    # Pre-specified result 5: player-level heterogeneity
-    # Compute between-player SD of clutch differential under Model A.
-    # (Full player-level analysis is Step 6; here we report the SD.)
+    # Player-level heterogeneity (SD of clutch differential, Model A)
     # ------------------------------------------------------------------
     print("\n[8] Player-level heterogeneity (SD of clutch differential, Model A) …")
     clutch_player_A = (
@@ -493,7 +501,6 @@ def main() -> None:  # noqa: C901
     clutch_player_A["diff_A"] = (
         clutch_player_A["mean_clutch_resid_A"] - clutch_player_A["mean_p_A"]
     )
-    # Weighted SD (weight by n_clutch)
     n_arr = clutch_player_A["n_clutch"].values.astype(float)
     d_arr = clutch_player_A["diff_A"].values.astype(float)
     w = n_arr / n_arr.sum()
@@ -542,11 +549,8 @@ def main() -> None:  # noqa: C901
     # Step 5: Exploratory cuts (must be labelled exploratory)
     # ------------------------------------------------------------------
     print("\n[9] Exploratory: clutch residual by time bucket …")
-    # Three time buckets inside the clutch window (<=300 s): [0,60), [60,180), [180,300]
-    # We need TIME_REMAINING_SEC; merge from all_shots.
     all_shots = pd.read_parquet(DATA / "all_shots.parquet")
     all_shots["GAME_ID"] = all_shots["GAME_ID"].astype(str)
-    # Keep only the columns we need
     time_cols = all_shots[["GAME_ID", "GAME_EVENT_ID", "TIME_REMAINING_SEC", "IS_HOME"]].copy()
     clutch_ext = clutch.merge(time_cols, on=["GAME_ID", "GAME_EVENT_ID"], how="left")
 
@@ -562,8 +566,11 @@ def main() -> None:  # noqa: C901
         exp_time_A.append(_residual_row(label, sub, "p_A", rng))
         exp_time_B.append(_residual_row(label, sub, "p_B", rng))
         print(
-            f"    {label}: Model A {exp_time_A[-1]['residual_pp']:+.3f} pp  "
-            f"Model B {exp_time_B[-1]['residual_pp']:+.3f} pp  n={len(sub):,}"
+            f"    {label}: Model A {exp_time_A[-1]['residual_pp']:+.3f} pp "
+            f"[{exp_time_A[-1]['ci_lower_pp']:+.3f}, {exp_time_A[-1]['ci_upper_pp']:+.3f}]  "
+            f"Model B {exp_time_B[-1]['residual_pp']:+.3f} pp "
+            f"[{exp_time_B[-1]['ci_lower_pp']:+.3f}, {exp_time_B[-1]['ci_upper_pp']:+.3f}]  "
+            f"n={len(sub):,}"
         )
 
     print("\n[10] Exploratory: clutch residual home vs away …")
@@ -577,15 +584,17 @@ def main() -> None:  # noqa: C901
         exp_home_A.append(_residual_row(label, sub, "p_A", rng))
         exp_home_B.append(_residual_row(label, sub, "p_B", rng))
         print(
-            f"    {label}: Model A {exp_home_A[-1]['residual_pp']:+.3f} pp  "
-            f"Model B {exp_home_B[-1]['residual_pp']:+.3f} pp  n={len(sub):,}"
+            f"    {label}: Model A {exp_home_A[-1]['residual_pp']:+.3f} pp "
+            f"[{exp_home_A[-1]['ci_lower_pp']:+.3f}, {exp_home_A[-1]['ci_upper_pp']:+.3f}]  "
+            f"Model B {exp_home_B[-1]['residual_pp']:+.3f} pp "
+            f"[{exp_home_B[-1]['ci_lower_pp']:+.3f}, {exp_home_B[-1]['ci_upper_pp']:+.3f}]  "
+            f"n={len(sub):,}"
         )
 
     # ------------------------------------------------------------------
     # Figures
     # ------------------------------------------------------------------
     print("\n[11] Generating forest plot …")
-    # Forest plot rows: overall, 2PT, 3PT for clutch; overall for late-blowout
     forest_labels = [
         "CLUTCH overall",
         "CLUTCH 2PT",
@@ -594,11 +603,8 @@ def main() -> None:  # noqa: C901
     ]
     forest_A_data = [clutch_A_overall, clutch_A_2pt, clutch_A_3pt, lb_A_overall]
     forest_B_data = [clutch_B_overall, clutch_B_2pt, clutch_B_3pt, lb_B_overall]
-
-    # Rename labels for the plot
     for d, label in zip(forest_A_data + forest_B_data, forest_labels * 2):
         d["label"] = label
-
     plot_forest(forest_A_data, forest_B_data, DOCS / "clutch_effect_overview.png")
 
     print("\n[12] Generating residual-by-period plot …")
@@ -624,9 +630,10 @@ def main() -> None:  # noqa: C901
             "n_bootstrap": N_BOOT,
             "bootstrap_method": "game-level cluster bootstrap (resample GAME_IDs), 95% percentile CI",
             "rng_seed": RNG_SEED,
-            "resolution_limit_note": (
-                "Binomial noise alone gives SE ~0.6 pp overall, ~0.8 pp for 2PT, "
-                "~0.9 pp for 3PT. Effects smaller than ~1.5–2 pp cannot be resolved."
+            "precision_note": (
+                "Binomial standard error about 0.6 pp for the overall clutch residual "
+                "(7,104 shots), about 0.8 pp for 2PT (4,246 shots), about 0.9 pp for "
+                "3PT (2,858 shots). The 95% interval half-width is about 1 pp overall."
             ),
             "model_B_uncertainty_note": (
                 "Player offsets (b_player) are treated as fixed in the bootstrap. "
@@ -658,14 +665,24 @@ def main() -> None:  # noqa: C901
                     "by_shot_value": [lb_B_2pt, lb_B_3pt],
                 },
             },
+            "clutch_minus_late_blowout_difference": {
+                "description": (
+                    "Game-level cluster bootstrap CI (2,000 resamples, seed 42, "
+                    "resampling whole GAME_IDs over all 1,230 games to preserve "
+                    "the 437-game overlap) for CLUTCH residual minus LATE_BLOWOUT "
+                    "residual. Negative means CLUTCH residual is more negative "
+                    "than LATE_BLOWOUT."
+                ),
+                "results": diff_results,
+            },
             "regular_residual_by_period": {
                 "description": (
                     "REGULAR out-of-fold residual by period (Q1–Q4). "
-                    "Period 4 contains only the first 55 min of Q4 "
-                    "(clutch and late-blowout shots in the last 5 min are excluded). "
-                    "Hypothesis (not stated as fact): the alternating sign (+Q1, -Q2, +Q3, -Q4) "
-                    "may reflect shooter-quality composition — starters play more in Q1/Q3 and "
-                    "bench players more in Q2/Q4 — which Model B should partly absorb."
+                    "Period 4 contains only the first 7 min of Q4 (clock > 5:00; "
+                    "last 5 min of Q4 and OT are excluded). "
+                    "The alternating sign pattern (+Q1, −Q2, +Q3, −Q4) is unexplained: "
+                    "Model B moves Q1 and Q3 toward zero, but Q2 moves from −0.44 to "
+                    "−0.57 pp and Q4 stays at −0.60 pp."
                 ),
                 "model_A": period_rows_A,
                 "model_B": period_rows_B,

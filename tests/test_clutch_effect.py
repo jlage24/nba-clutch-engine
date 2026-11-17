@@ -258,6 +258,17 @@ class TestClutchEffectJSON:
 
     def test_descriptive_table_rows(self, data) -> None:
         assert len(data["descriptive_table"]) == 6
+        for row in data["descriptive_table"]:
+            assert "mean_b_player_pp" in row
+
+    def test_clutch_minus_late_blowout_present(self, data) -> None:
+        diff_sec = data["secondary"]["clutch_minus_late_blowout_difference"]["results"]
+        for key in (
+            "overall_Model A", "2PT_Model A", "3PT_Model A",
+            "overall_Model B", "2PT_Model B", "3PT_Model B",
+        ):
+            assert key in diff_sec
+            assert diff_sec[key]["ci_lower_pp"] <= diff_sec[key]["point_diff_pp"] <= diff_sec[key]["ci_upper_pp"]
 
     def test_residual_in_range(self, data) -> None:
         """Primary residuals should be within ±50 pp (sanity bound)."""

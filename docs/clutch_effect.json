@@ -6,7 +6,7 @@
     "n_bootstrap": 2000,
     "bootstrap_method": "game-level cluster bootstrap (resample GAME_IDs), 95% percentile CI",
     "rng_seed": 42,
-    "resolution_limit_note": "Binomial noise alone gives SE ~0.6 pp overall, ~0.8 pp for 2PT, ~0.9 pp for 3PT. Effects smaller than ~1.5\u20132 pp cannot be resolved.",
+    "precision_note": "Binomial standard error about 0.6 pp for the overall clutch residual (7,104 shots), about 0.8 pp for 2PT (4,246 shots), about 0.9 pp for 3PT (2,858 shots). The 95% interval half-width is about 1 pp overall.",
     "model_B_uncertainty_note": "Player offsets (b_player) are treated as fixed in the bootstrap. This slightly understates Model B uncertainty."
   },
   "descriptive_table": [
@@ -15,42 +15,48 @@
       "n_shots": 114888,
       "obs_fg_pct": 54.994,
       "mean_p_A": 54.917,
-      "mean_p_B": 55.1
+      "mean_p_B": 55.1,
+      "mean_b_player_pp": 0.184
     },
     {
       "label": "REGULAR 3PT",
       "n_shots": 81310,
       "obs_fg_pct": 36.387,
       "mean_p_A": 36.501,
-      "mean_p_B": 36.654
+      "mean_p_B": 36.654,
+      "mean_b_player_pp": 0.153
     },
     {
       "label": "LATE_BLOWOUT 2PT",
       "n_shots": 9056,
       "obs_fg_pct": 56.648,
       "mean_p_A": 56.454,
-      "mean_p_B": 56.22
+      "mean_p_B": 56.22,
+      "mean_b_player_pp": -0.233
     },
     {
       "label": "LATE_BLOWOUT 3PT",
       "n_shots": 6802,
       "obs_fg_pct": 32.667,
       "mean_p_A": 36.293,
-      "mean_p_B": 36.181
+      "mean_p_B": 36.181,
+      "mean_b_player_pp": -0.112
     },
     {
       "label": "CLUTCH 2PT",
       "n_shots": 4246,
       "obs_fg_pct": 51.79,
       "mean_p_A": 53.652,
-      "mean_p_B": 54.16
+      "mean_p_B": 54.16,
+      "mean_b_player_pp": 0.509
     },
     {
       "label": "CLUTCH 3PT",
       "n_shots": 2858,
       "obs_fg_pct": 31.805,
       "mean_p_A": 36.182,
-      "mean_p_B": 36.766
+      "mean_p_B": 36.766,
+      "mean_b_player_pp": 0.584
     }
   ],
   "primary_result": {
@@ -194,8 +200,61 @@
         ]
       }
     },
+    "clutch_minus_late_blowout_difference": {
+      "description": "Game-level cluster bootstrap CI (2,000 resamples, seed 42, resampling whole GAME_IDs over all 1,230 games to preserve the 437-game overlap) for CLUTCH residual minus LATE_BLOWOUT residual. Negative means CLUTCH residual is more negative than LATE_BLOWOUT.",
+      "results": {
+        "overall_Model A": {
+          "n_shots_clutch": 7104,
+          "n_shots_late_blowout": 15858,
+          "n_games_pool": 1230,
+          "point_diff_pp": -1.429,
+          "ci_lower_pp": -2.71,
+          "ci_upper_pp": -0.152
+        },
+        "2PT_Model A": {
+          "n_shots_clutch": 4246,
+          "n_shots_late_blowout": 9056,
+          "n_games_pool": 1230,
+          "point_diff_pp": -2.056,
+          "ci_lower_pp": -3.743,
+          "ci_upper_pp": -0.388
+        },
+        "3PT_Model A": {
+          "n_shots_clutch": 2858,
+          "n_shots_late_blowout": 6802,
+          "n_games_pool": 1230,
+          "point_diff_pp": -0.751,
+          "ci_lower_pp": -2.768,
+          "ci_upper_pp": 1.348
+        },
+        "overall_Model B": {
+          "n_shots_clutch": 7104,
+          "n_shots_late_blowout": 15858,
+          "n_games_pool": 1230,
+          "point_diff_pp": -2.149,
+          "ci_lower_pp": -3.396,
+          "ci_upper_pp": -0.901
+        },
+        "2PT_Model B": {
+          "n_shots_clutch": 4246,
+          "n_shots_late_blowout": 9056,
+          "n_games_pool": 1230,
+          "point_diff_pp": -2.798,
+          "ci_lower_pp": -4.438,
+          "ci_upper_pp": -1.07
+        },
+        "3PT_Model B": {
+          "n_shots_clutch": 2858,
+          "n_shots_late_blowout": 6802,
+          "n_games_pool": 1230,
+          "point_diff_pp": -1.447,
+          "ci_lower_pp": -3.443,
+          "ci_upper_pp": 0.59
+        }
+      }
+    },
     "regular_residual_by_period": {
-      "description": "REGULAR out-of-fold residual by period (Q1\u2013Q4). Period 4 contains only the first 55 min of Q4 (clutch and late-blowout shots in the last 5 min are excluded). Hypothesis (not stated as fact): the alternating sign (+Q1, -Q2, +Q3, -Q4) may reflect shooter-quality composition \u2014 starters play more in Q1/Q3 and bench players more in Q2/Q4 \u2014 which Model B should partly absorb.",
+      "description": "REGULAR out-of-fold residual by period (Q1\u2013Q4). Period 4 contains only the first 7 min of Q4 (clock > 5:00; last 5 min of Q4 and OT are excluded). The alternating sign pattern (+Q1, \u2212Q2, +Q3, \u2212Q4) is unexplained: Model B moves Q1 and Q3 toward zero, but Q2 moves from \u22120.44 to \u22120.57 pp and Q4 stays at \u22120.60 pp.",
       "model_A": [
         {
           "label": "Q1",
