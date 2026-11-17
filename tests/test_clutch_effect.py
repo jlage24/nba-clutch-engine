@@ -72,8 +72,10 @@ if str(ROOT) not in sys.path:
 from src.clutch_effect import (
     _build_game_index,
     _residual_row,
+    _residual_row_fast,
     bootstrap_residual,
     build_descriptive_table,
+    compute_time_bucket_brier_gain,
     N_BOOT,
 )
 
@@ -253,8 +255,36 @@ class TestClutchEffectJSON:
 
     def test_exploratory_key_present(self, data) -> None:
         exp = data["exploratory"]
-        assert "clutch_by_time_bucket" in exp
-        assert "clutch_home_vs_away" in exp
+        for key in (
+            "clutch_by_time_bucket",
+            "clutch_home_vs_away",
+            "late_blowout_by_time_bucket",
+            "regular_home_vs_away",
+            "late_blowout_home_vs_away",
+            "clutch_excluding_last_60s",
+            "phase3_time_ablation_consistency",
+        ):
+            assert key in exp
+
+    def test_brier_gain_helper(self) -> None:
+        rows = [
+            {"n_shots": 100, "residual_pp": -6.0},
+            {"n_shots": 300, "residual_pp": -2.0},
+        ]
+        res = compute_time_bucket_brier_gain(rows)
+        # mean = -3.0 pp; var = 0.25*(0.03)^2 + 0.75*(0.01)^2 = 0.000225 + 0.000075 = 0.0003
+        assert abs(res["overall_mean_resid_pp"] - (-3.0)) < 1e-6
+        assert abs(res["variance_explained_brier_gain"] - 0.0003) < 1e-6
+        assert abs(res["oracle_delta_brier"] - (-0.0003)) < 1e-6
+
+    def test_residual_row_fast_matches_point_estimate(self) -> None:
+        df = _make_mini_oof(n_shots=120, n_games=8, seed=3)
+        r_std = _residual_row("x", df, "p_A", np.random.default_rng(7))
+        r_fast = _residual_row_fast("x", df, "p_A", np.random.default_rng(7))
+        assert r_std["residual_pp"] == r_fast["residual_pp"]
+        assert r_std["obs_fg_pct"] == r_fast["obs_fg_pct"]
+        assert r_std["exp_fg_pct"] == r_fast["exp_fg_pct"]
+        assert r_fast["ci_lower_pp"] <= r_fast["residual_pp"] <= r_fast["ci_upper_pp"]
 
     def test_descriptive_table_rows(self, data) -> None:
         assert len(data["descriptive_table"]) == 6

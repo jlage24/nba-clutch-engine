@@ -511,6 +511,216 @@
           "ci_upper_pp": -3.322
         }
       ]
+    },
+    "late_blowout_by_time_bucket": {
+      "description": "Exploratory E1: LATE_BLOWOUT residual by the same time buckets (<=300 s).",
+      "model_A": [
+        {
+          "label": "last_60s",
+          "n_shots": 3087,
+          "n_games": 986,
+          "obs_fg_pct": 44.477,
+          "exp_fg_pct": 48.047,
+          "residual_pp": -3.57,
+          "ci_lower_pp": -5.128,
+          "ci_upper_pp": -1.989
+        },
+        {
+          "label": "60_180s",
+          "n_shots": 6420,
+          "n_games": 998,
+          "obs_fg_pct": 47.212,
+          "exp_fg_pct": 47.978,
+          "residual_pp": -0.767,
+          "ci_lower_pp": -1.874,
+          "ci_upper_pp": 0.402
+        },
+        {
+          "label": "180_300s",
+          "n_shots": 6351,
+          "n_games": 1006,
+          "obs_fg_pct": 46.418,
+          "exp_fg_pct": 47.515,
+          "residual_pp": -1.097,
+          "ci_lower_pp": -2.285,
+          "ci_upper_pp": 0.09
+        }
+      ],
+      "model_B": [
+        {
+          "label": "last_60s",
+          "n_shots": 3087,
+          "n_games": 986,
+          "obs_fg_pct": 44.477,
+          "exp_fg_pct": 47.719,
+          "residual_pp": -3.242,
+          "ci_lower_pp": -4.714,
+          "ci_upper_pp": -1.651
+        },
+        {
+          "label": "60_180s",
+          "n_shots": 6420,
+          "n_games": 998,
+          "obs_fg_pct": 47.212,
+          "exp_fg_pct": 47.783,
+          "residual_pp": -0.571,
+          "ci_lower_pp": -1.713,
+          "ci_upper_pp": 0.526
+        },
+        {
+          "label": "180_300s",
+          "n_shots": 6351,
+          "n_games": 1006,
+          "obs_fg_pct": 46.418,
+          "exp_fg_pct": 47.418,
+          "residual_pp": -1.0,
+          "ci_lower_pp": -2.121,
+          "ci_upper_pp": 0.196
+        }
+      ]
+    },
+    "regular_home_vs_away": {
+      "description": "Exploratory E2: REGULAR OOF residual split by home vs away shooter.",
+      "model_A": [
+        {
+          "label": "home",
+          "n_shots": 97916,
+          "n_games": 1230,
+          "obs_fg_pct": 47.582,
+          "exp_fg_pct": 47.428,
+          "residual_pp": 0.153,
+          "ci_lower_pp": -0.157,
+          "ci_upper_pp": 0.475
+        },
+        {
+          "label": "away",
+          "n_shots": 98282,
+          "n_games": 1230,
+          "obs_fg_pct": 46.984,
+          "exp_fg_pct": 47.142,
+          "residual_pp": -0.158,
+          "ci_lower_pp": -0.505,
+          "ci_upper_pp": 0.16
+        }
+      ],
+      "model_B": [
+        {
+          "label": "home",
+          "n_shots": 97916,
+          "n_games": 1230,
+          "obs_fg_pct": 47.582,
+          "exp_fg_pct": 47.603,
+          "residual_pp": -0.022,
+          "ci_lower_pp": -0.334,
+          "ci_upper_pp": 0.28
+        },
+        {
+          "label": "away",
+          "n_shots": 98282,
+          "n_games": 1230,
+          "obs_fg_pct": 46.984,
+          "exp_fg_pct": 47.308,
+          "residual_pp": -0.324,
+          "ci_lower_pp": -0.638,
+          "ci_upper_pp": -0.007
+        }
+      ]
+    },
+    "late_blowout_home_vs_away": {
+      "description": "Exploratory E2: LATE_BLOWOUT residual split by home vs away shooter.",
+      "model_A": [
+        {
+          "label": "home",
+          "n_shots": 7810,
+          "n_games": 1068,
+          "obs_fg_pct": 46.287,
+          "exp_fg_pct": 47.576,
+          "residual_pp": -1.289,
+          "ci_lower_pp": -2.328,
+          "ci_upper_pp": -0.303
+        },
+        {
+          "label": "away",
+          "n_shots": 8048,
+          "n_games": 1076,
+          "obs_fg_pct": 46.434,
+          "exp_fg_pct": 48.03,
+          "residual_pp": -1.596,
+          "ci_lower_pp": -2.581,
+          "ci_upper_pp": -0.645
+        }
+      ],
+      "model_B": [
+        {
+          "label": "home",
+          "n_shots": 7810,
+          "n_games": 1068,
+          "obs_fg_pct": 46.287,
+          "exp_fg_pct": 47.456,
+          "residual_pp": -1.17,
+          "ci_lower_pp": -2.152,
+          "ci_upper_pp": -0.178
+        },
+        {
+          "label": "away",
+          "n_shots": 8048,
+          "n_games": 1076,
+          "obs_fg_pct": 46.434,
+          "exp_fg_pct": 47.788,
+          "residual_pp": -1.354,
+          "ci_lower_pp": -2.384,
+          "ci_upper_pp": -0.362
+        }
+      ]
+    },
+    "clutch_excluding_last_60s": {
+      "description": "Exploratory E3: CLUTCH residual for shots with TIME_REMAINING_SEC >= 60 (60\u2013300 s).",
+      "model_A": {
+        "label": "clutch_60_300s (Model A)",
+        "n_shots": 5312,
+        "n_games": 523,
+        "obs_fg_pct": 44.917,
+        "exp_fg_pct": 46.763,
+        "residual_pp": -1.846,
+        "ci_lower_pp": -3.043,
+        "ci_upper_pp": -0.661
+      },
+      "model_B": {
+        "label": "clutch_60_300s (Model B)",
+        "n_shots": 5312,
+        "n_games": 523,
+        "obs_fg_pct": 44.917,
+        "exp_fg_pct": 47.254,
+        "residual_pp": -2.337,
+        "ci_lower_pp": -3.568,
+        "ci_upper_pp": -1.055
+      }
+    },
+    "phase3_time_ablation_consistency": {
+      "model_A_bucket_variance": {
+        "overall_mean_resid_pp": -2.874,
+        "variance_explained_brier_gain": 0.000341,
+        "oracle_delta_brier": -0.000341
+      },
+      "model_B_bucket_variance": {
+        "overall_mean_resid_pp": -3.412,
+        "variance_explained_brier_gain": 0.000369,
+        "oracle_delta_brier": -0.000369
+      },
+      "phase3_cumulative_ablation_time_step": {
+        "source": "Phase 3 cumulative ablation (README.md, step (c) + TIME_REMAINING_SEC)",
+        "delta_brier": -9e-05,
+        "ci_lower": -0.00055,
+        "ci_upper": 0.00038,
+        "ci_half_width": 0.000465
+      },
+      "phase3_drop_one_note": {
+        "source": "docs/metrics.json methodology_notes",
+        "delta_brier": 6e-05,
+        "p_value": 0.868
+      },
+      "could_phase3_have_detected_pattern": false,
+      "conclusion": "No \u2014 Phase 3 could not have detected this time-bucket pattern in its Brier ablation. Even an oracle time-bucket model explains only 0.00034 (Model A) to 0.00037 (Model B) in Brier score (oracle delta Brier -0.00034 to -0.00037), which is smaller than the 95% CI half-width (~0.00047) of the Phase 3 TIME_REMAINING_SEC ablation step (delta Brier -0.00009, 95% CI [-0.00055, +0.00038]) before accounting for out-of-fold tree estimation noise. The Phase 3 and Phase 3b results are consistent."
     }
   }
 }
