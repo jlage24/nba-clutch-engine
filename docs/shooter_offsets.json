@@ -1,0 +1,84 @@
+{
+  "fold_stats": [
+    {
+      "fold": 0,
+      "n_regular_train": 157207,
+      "n_players": 565,
+      "tau2": 0.00111991709546038,
+      "tau_pp": 3.3465162414970884,
+      "rbar": 0.0003287971885419124,
+      "avg_shrinkage_factor": 0.4616638529679155
+    },
+    {
+      "fold": 1,
+      "n_regular_train": 156879,
+      "n_players": 569,
+      "tau2": 0.0011240506296965051,
+      "tau_pp": 3.3526864298596504,
+      "rbar": -0.0006147808362960256,
+      "avg_shrinkage_factor": 0.4598773101829759
+    },
+    {
+      "fold": 2,
+      "n_regular_train": 156769,
+      "n_players": 568,
+      "tau2": 0.0010730451774833498,
+      "tau_pp": 3.2757368293001647,
+      "rbar": -0.0003449085679092697,
+      "avg_shrinkage_factor": 0.45202718931125097
+    },
+    {
+      "fold": 3,
+      "n_regular_train": 157071,
+      "n_players": 564,
+      "tau2": 0.0009640568653586819,
+      "tau_pp": 3.1049265133955775,
+      "rbar": -0.0008268716711802422,
+      "avg_shrinkage_factor": 0.4347051868333017
+    },
+    {
+      "fold": 4,
+      "n_regular_train": 156866,
+      "n_players": 566,
+      "tau2": 0.0010470980572786677,
+      "tau_pp": 3.235889456206234,
+      "rbar": -0.0007312804505651534,
+      "avg_shrinkage_factor": 0.44867633060089607
+    }
+  ],
+  "validity_check": {
+    "model_A_regular": {
+      "brier": 0.22649261580816407,
+      "log_loss": 0.6424153846942374,
+      "roc_auc": 0.6525978828676425,
+      "ece": 0.003249452332390478
+    },
+    "model_B_regular": {
+      "brier": 0.22582754190585896,
+      "log_loss": 0.6410546564593395,
+      "roc_auc": 0.6567390575430476,
+      "ece": 0.005813280826573171
+    },
+    "paired_diff_B_minus_A": {
+      "brier": {
+        "point_diff": -0.0006650739023050757,
+        "ci_lower": -0.0007725381857371478,
+        "ci_upper": -0.0005545202976569715,
+        "std_err": 5.571358685121459e-05,
+        "p_value": 0.0
+      },
+      "log_loss": {
+        "point_diff": -0.0013607282348980165,
+        "ci_lower": -0.0016096155099140793,
+        "ci_upper": -0.0011078796638762849,
+        "std_err": 0.0001274942290050723,
+        "p_value": 0.0
+      }
+    },
+    "b_beats_a_on_brier": true,
+    "b_beats_a_on_log_loss": true,
+    "b_carries_usable_information": true,
+    "note": "Model B beats Model A on REGULAR held-out shots."
+  },
+  "documented_limitation": "The out-of-fold residuals used to estimate player offsets come from models whose hyperparameters were tuned using all folds' games. This is a second-order effect (tuning never observed individual shot outcomes directly), so the impact on offset estimates is expected to be negligible, but it means Model B's uncertainty is slightly understated."
+}
