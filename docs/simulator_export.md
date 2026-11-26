@@ -8,9 +8,9 @@ This document describes the portable make-probability export under `export/` and
 | :--- | :--- | ---: | :--- |
 | `export/model_a.json` | XGBoost JSON | 819,320 | Final Model A fitted on all `196,198` normal-play (`REGULAR`) shots (`n_estimators=168`) |
 | `export/player_offsets.csv` | CSV | 27,040 | Shrunk per-player offsets (`PLAYER_ID`, `PLAYER_NAME`, `n_regular_shots`, `offset`) for `572` players |
-| `export/clutch_shift.json` | JSON | 2,665 | Constant logit-scale clutch shift estimates with 95% game-level bootstrap intervals |
-| `export/manifest.json` | JSON | 4,786 | Exact feature order, `ACTION_GROUP` categories, inference guardrails, versions, and limitations |
-| **Total** | | **853,811** | **833.8 KB** |
+| `export/clutch_shift.json` | JSON | 2,915 | Constant logit-scale clutch shift estimates with 95% game-level bootstrap intervals |
+| `export/manifest.json` | JSON | 5,031 | Exact feature order, `ACTION_GROUP` categories, inference guardrails, versions, and limitations |
+| **Total** | | **854,306** | **834.3 KB** |
 
 ## 2. How the Export Is Built and Rebuilt
 
@@ -76,7 +76,8 @@ Intervals below are 95% game-level cluster bootstrap intervals (`2,000` resample
 | *Exploratory* Model B — 3PT minus 2PT | 4,246 / 2,858 | 543 | `-0.116925` | `[-0.217228, -0.017297]` |
 
 - **Comparison with Phase 3b per-fold shifts (`docs/predictive_comparison.json`):** The `5` cross-fitted Model B clutch shifts in Phase 3b were `-0.15196`, `-0.15879`, `-0.14590`, `-0.14875`, `-0.14794` (range `-0.15879` to `-0.14590`, mean `-0.150668`). The exported Model B overall shift (`-0.150672`) falls inside this per-fold range.
-- **2-point vs 3-point policy:** No detectable difference between 2-point and 3-point shifts at this sample size; the simulator uses one overall shift in v1.
+- **2-point vs 3-point policy:** Exploratory, not pre-specified: in this cut the 3-point clutch shift is more negative than the 2-point shift (Model B, 3PT minus 2PT = -0.117 logit, 95% CI -0.217 to -0.017; one of several exploratory cuts, with the interval close to zero). The simulator uses one overall shift by default; the per-shot-type shifts are exported so the app can offer an optional switch. Across the `2,000` bootstrap resamples, the correlation between the Model B 2-point and 3-point shifts is `-0.062702` (`std_err_logit` of difference = `0.050990`).
+- **Interval comparison note:** The 2-point and 3-point intervals each include the overall shift, but this does not test whether the two shifts differ, and the paired difference above is the relevant quantity.
 
 ## 5. Limitations
 
