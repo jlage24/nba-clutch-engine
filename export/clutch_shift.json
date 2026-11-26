@@ -1,0 +1,75 @@
+{
+  "meta": {
+    "description": "Descriptive constant logit-scale clutch shift: intercept of logistic regression of SHOT_MADE_FLAG on offset logit(clip(p_base, 1e-6, 1 - 1e-6)) over all 7,104 CLUTCH shots using out-of-fold baseline probabilities. This is a descriptive gap bundling defense, fatigue, shot selection within shot type, and shooter composition \u2014 not a causal pressure effect.",
+    "app_uses_single_shift_in_v1": true,
+    "n_bootstrap": 2000,
+    "bootstrap_method": "game-level cluster bootstrap (resample GAME_IDs), 95% percentile CI",
+    "rng_seed": 42,
+    "logit_clip_eps": 1e-06
+  },
+  "model_a": {
+    "shift_logit": -0.127007,
+    "ci_lower_logit": -0.17414,
+    "ci_upper_logit": -0.081083,
+    "std_err_logit": 0.023168,
+    "n_shots": 7104,
+    "n_games": 543
+  },
+  "model_b": {
+    "shift_logit": -0.150672,
+    "ci_lower_logit": -0.196396,
+    "ci_upper_logit": -0.105809,
+    "std_err_logit": 0.022878,
+    "n_shots": 7104,
+    "n_games": 543
+  },
+  "phase3b_fold_comparison_model_b": {
+    "source": "docs/predictive_comparison.json (model_b_shift_folds)",
+    "per_fold_deltas_logit": [
+      -0.15196,
+      -0.15879,
+      -0.1459,
+      -0.14875,
+      -0.14794
+    ],
+    "fold_min_logit": -0.15879,
+    "fold_max_logit": -0.1459,
+    "fold_mean_logit": -0.150668,
+    "within_fold_range": true
+  },
+  "exploratory": {
+    "warning": "Exploratory breakdown by SHOT_VALUE; the simulator uses one overall shift in v1. If the 2PT or 3PT interval includes the overall shift, the data does not support separate shifts.",
+    "model_a_2pt": {
+      "shift_logit": -0.082224,
+      "ci_lower_logit": -0.139883,
+      "ci_upper_logit": -0.018925,
+      "std_err_logit": 0.031001,
+      "n_shots": 4246,
+      "n_games": 519
+    },
+    "model_a_3pt": {
+      "shift_logit": -0.195819,
+      "ci_lower_logit": -0.272682,
+      "ci_upper_logit": -0.115447,
+      "std_err_logit": 0.040804,
+      "n_shots": 2858,
+      "n_games": 501
+    },
+    "model_b_2pt": {
+      "shift_logit": -0.104636,
+      "ci_lower_logit": -0.159403,
+      "ci_upper_logit": -0.040883,
+      "std_err_logit": 0.030514,
+      "n_shots": 4246,
+      "n_games": 519
+    },
+    "model_b_3pt": {
+      "shift_logit": -0.221561,
+      "ci_lower_logit": -0.29905,
+      "ci_upper_logit": -0.14103,
+      "std_err_logit": 0.040897,
+      "n_shots": 2858,
+      "n_games": 501
+    }
+  }
+}

@@ -1,0 +1,118 @@
+{
+  "schema_version": "1.0.0",
+  "created_at_utc": "2026-11-26T12:48:50.419055+00:00",
+  "model_description": "Descriptive shot-make probability model for NBA simulator (Phase 4a). Baseline Model A fitted on regular-play shots only; Model B adds shrunk per-player regular-play offsets; optional clutch shift adds a descriptive constant logit-scale offset estimated from clutch out-of-fold residuals.",
+  "features": [
+    "LOC_X",
+    "LOC_Y",
+    "SHOT_DISTANCE_FT",
+    "SHOT_ANGLE",
+    "SHOT_VALUE",
+    "ACTION_GROUP",
+    "IS_PUTBACK"
+  ],
+  "numeric_features": [
+    "LOC_X",
+    "LOC_Y",
+    "SHOT_DISTANCE_FT",
+    "SHOT_ANGLE",
+    "SHOT_VALUE",
+    "IS_PUTBACK"
+  ],
+  "categorical_features": [
+    "ACTION_GROUP"
+  ],
+  "action_group_categories": [
+    "dunk",
+    "layup",
+    "hook",
+    "floater",
+    "stepback",
+    "pullup",
+    "fadeaway",
+    "jump_shot",
+    "other"
+  ],
+  "feature_rules": {
+    "loc_units": "LOC_X and LOC_Y are in tenths of a foot with the hoop at (0, 0).",
+    "shot_distance_ft": "Computed as hypot(LOC_X, LOC_Y) / 10.0 when not explicitly supplied.",
+    "shot_angle": "Computed as degrees(arctan2(LOC_X, LOC_Y)) when not explicitly supplied.",
+    "is_putback": "1 if ACTION_TYPE contains 'tip' or 'putback' (case-insensitive), else 0, unless IS_PUTBACK is provided explicitly.",
+    "distance_clamp_rule": "If IS_PUTBACK == 0 and SHOT_DISTANCE_FT < 1.0, clamp SHOT_DISTANCE_FT to 1.0 (matches src/predict.py; in training data, exact (0, 0) occurs almost only on tips and putbacks).",
+    "unknown_action_group_policy": "Raise ValueError if any ACTION_GROUP value is not in action_group_categories."
+  },
+  "prediction_formula": {
+    "model_a": "p_A = Model A XGBoost predict_proba(X)[:, 1]",
+    "model_b": "p_B = clip(p_A + b_player, 0.01, 0.99); unknown/absent player uses b_player = 0 so p_B = p_A",
+    "final": "p_final = sigmoid(logit(clip(p_base, 1e-6, 1 - 1e-6)) + shift), with shift = 0 when clutch_shift=False",
+    "p_b_clip_low": 0.01,
+    "p_b_clip_high": 0.99,
+    "logit_clip_eps": 1e-06
+  },
+  "model_a_training": {
+    "source_script": "src/export_model.py",
+    "hyperparameters": {
+      "max_depth": 6,
+      "learning_rate": 0.03,
+      "min_child_weight": 50,
+      "subsample": 0.8,
+      "colsample_bytree": 0.8,
+      "reg_lambda": 3.0
+    },
+    "n_estimators": 168,
+    "trees_per_fold_phase3b": [
+      140,
+      170,
+      170,
+      168,
+      167
+    ],
+    "tree_method": "hist",
+    "enable_categorical": true,
+    "eval_metric": "logloss",
+    "random_seed": 42,
+    "n_regular_training_shots": 196198,
+    "double_fit_determinism": {
+      "n_shots_checked": 219160,
+      "exact_match": true,
+      "max_abs_diff": 0.0
+    }
+  },
+  "player_offsets": {
+    "estimator": "DerSimonian-Laird empirical-Bayes shrinkage on REGULAR OOF residuals (Model A)",
+    "n_regular_shots": 196198,
+    "n_players_in_table": 572,
+    "n_players_total_dataset": 582,
+    "n_players_absent_zero_regular_shots": 10,
+    "absent_player_rule": "The 10 players with no regular-play shots (plus any unknown player) are absent from player_offsets.csv and receive offset 0.0.",
+    "tau2": 0.0010723668756108863,
+    "tau_pp": 3.274701323190996,
+    "rbar": -0.00043621038643437135,
+    "avg_shrinkage_factor": 0.48961618337240936
+  },
+  "data_facts": {
+    "season": "2025-26 regular season",
+    "total_shots": 219160,
+    "regular_shots": 196198,
+    "late_blowout_shots": 15858,
+    "clutch_shots": 7104,
+    "n_games": 1230,
+    "n_clutch_games": 543,
+    "n_folds": 5
+  },
+  "rng_seed": 42,
+  "versions": {
+    "python": "3.14.4",
+    "xgboost": "3.4.1",
+    "pandas": "3.0.6",
+    "numpy": "2.5.4",
+    "scikit_learn": "1.9.1"
+  },
+  "limitations": [
+    "Single season only (2025-26 NBA regular season).",
+    "No defender tracking, closest-defender distance, or shot-clock data.",
+    "The clutch shift is a descriptive gap, not a causal pressure effect; it bundles defensive intensity, fatigue, shot selection within shot type, and shooter composition.",
+    "The clutch shift was estimated using out-of-fold p_A/p_B from models trained on 80% of games, whereas the exported Model A is fitted on 100% of regular-play shots (a second-order difference).",
+    "Player offsets in the export are estimated from all regular-play shots using out-of-fold residuals, so players with few shots are shrunk more toward the grand mean, and the 10 players with zero regular-play shots are absent from player_offsets.csv and receive offset 0.0."
+  ]
+}
