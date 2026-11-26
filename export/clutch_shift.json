@@ -38,7 +38,7 @@
     "within_fold_range": true
   },
   "exploratory": {
-    "warning": "Exploratory breakdown by SHOT_VALUE: no detectable difference between 2-point and 3-point shifts at this sample size; the simulator uses one overall shift in v1.",
+    "warning": "Exploratory, not pre-specified: in this cut the 3-point clutch shift is more negative than the 2-point shift (Model B, 3PT minus 2PT = -0.117 logit, 95% CI -0.217 to -0.017; one of several exploratory cuts, with the interval close to zero). The simulator uses one overall shift by default; the per-shot-type shifts are exported so the app can offer an optional switch.",
     "model_a_2pt": {
       "shift_logit": -0.082224,
       "ci_lower_logit": -0.139883,
@@ -77,6 +77,7 @@
       "ci_lower_logit": -0.217228,
       "ci_upper_logit": -0.017297,
       "std_err_logit": 0.05099,
+      "corr_2pt_3pt_bootstrap": -0.062702,
       "n_shots_2pt": 4246,
       "n_shots_3pt": 2858,
       "n_games_pool": 543

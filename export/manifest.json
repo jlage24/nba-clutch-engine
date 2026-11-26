@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "created_at_utc": "2026-11-26T12:55:50.895040+00:00",
+  "created_at_utc": "2026-11-26T13:01:19.985064+00:00",
   "model_description": "Descriptive shot-make probability model for NBA simulator (Phase 4a). Baseline Model A fitted on regular-play shots only; Model B adds shrunk per-player regular-play offsets; optional clutch shift adds a descriptive constant logit-scale offset estimated from clutch out-of-fold residuals.",
   "features": [
     "LOC_X",
@@ -45,7 +45,7 @@
     "model_a": "p_A = Model A XGBoost predict_proba(X)[:, 1]",
     "model_b": "p_B = clip(p_A + b_player, 0.01, 0.99); unknown/absent player uses b_player = 0 so p_B = p_A",
     "final": "p_final = sigmoid(logit(clip(p_base, 1e-6, 1 - 1e-6)) + shift), with shift = 0 when clutch_shift=False",
-    "shift_scope_note": "no detectable difference between 2-point and 3-point shifts at this sample size; the simulator uses one overall shift in v1",
+    "shift_scope_note": "Exploratory, not pre-specified: in this cut the 3-point clutch shift is more negative than the 2-point shift (Model B, 3PT minus 2PT = -0.117 logit, 95% CI -0.217 to -0.017; one of several exploratory cuts, with the interval close to zero). The simulator uses one overall shift by default; the per-shot-type shifts are exported so the app can offer an optional switch.",
     "p_b_clip_low": 0.01,
     "p_b_clip_high": 0.99,
     "logit_clip_eps": 1e-06

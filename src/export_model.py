@@ -237,6 +237,8 @@ def bootstrap_logit_shift_diff(
     )
 
     rng = np.random.default_rng(seed)
+    boot_s2 = np.empty(n_resamples, dtype=float)
+    boot_s3 = np.empty(n_resamples, dtype=float)
     boot_diffs = np.empty(n_resamples, dtype=float)
     empty_idx = np.empty(0, dtype=np.int64)
     for b in range(n_resamples):
@@ -245,10 +247,13 @@ def bootstrap_logit_shift_diff(
         idx_3 = np.concatenate([game_3pt_idx.get(g, empty_idx) for g in sampled_games])
         s2 = fit_logit_shift(p[idx_2], y[idx_2])
         s3 = fit_logit_shift(p[idx_3], y[idx_3])
+        boot_s2[b] = s2
+        boot_s3[b] = s3
         boot_diffs[b] = s3 - s2
 
     ci_lower = float(np.percentile(boot_diffs, 2.5))
     ci_upper = float(np.percentile(boot_diffs, 97.5))
+    corr_2pt_3pt = float(np.corrcoef(boot_s2, boot_s3)[0, 1])
 
     return {
         "label": "exploratory_3pt_minus_2pt_model_b",
@@ -256,10 +261,23 @@ def bootstrap_logit_shift_diff(
         "ci_lower_logit": round(ci_lower, 6),
         "ci_upper_logit": round(ci_upper, 6),
         "std_err_logit": round(float(np.std(boot_diffs, ddof=1)), 6),
+        "corr_2pt_3pt_bootstrap": round(corr_2pt_3pt, 6),
         "n_shots_2pt": int(is_2pt.sum()),
         "n_shots_3pt": int(is_3pt.sum()),
         "n_games_pool": int(n_games),
     }
+
+
+def format_exploratory_shift_note(exp_b_diff: dict[str, Any]) -> str:
+    """Format the exploratory 2PT vs 3PT shift note programmatically from diff stats."""
+    return (
+        "Exploratory, not pre-specified: in this cut the 3-point clutch shift is more "
+        f"negative than the 2-point shift (Model B, 3PT minus 2PT = "
+        f"{exp_b_diff['diff_logit']:.3f} logit, 95% CI {exp_b_diff['ci_lower_logit']:.3f} "
+        f"to {exp_b_diff['ci_upper_logit']:.3f}; one of several exploratory cuts, with the "
+        "interval close to zero). The simulator uses one overall shift by default; the "
+        "per-shot-type shifts are exported so the app can offer an optional switch."
+    )
 
 
 def build_clutch_shift_payload(oof_df: pd.DataFrame) -> dict[str, Any]:
@@ -310,11 +328,7 @@ def build_clutch_shift_payload(oof_df: pd.DataFrame) -> dict[str, Any]:
             "within_fold_range": bool(fold_min <= overall_b["shift_logit"] <= fold_max),
         },
         "exploratory": {
-            "warning": (
-                "Exploratory breakdown by SHOT_VALUE: no detectable difference between "
-                "2-point and 3-point shifts at this sample size; the simulator uses "
-                "one overall shift in v1."
-            ),
+            "warning": format_exploratory_shift_note(exp_b_diff),
             "model_a_2pt": exp_a_2pt,
             "model_a_3pt": exp_a_3pt,
             "model_b_2pt": exp_b_2pt,
@@ -331,6 +345,7 @@ def build_manifest(
     trees_per_fold: list[int],
     det_check: dict[str, Any],
     offsets_summary: dict[str, Any],
+    shift_scope_note: str,
 ) -> dict[str, Any]:
     """Assemble export/manifest.json with full schema, rules, metadata, and limits."""
     return {
@@ -365,10 +380,7 @@ def build_manifest(
             "model_a": "p_A = Model A XGBoost predict_proba(X)[:, 1]",
             "model_b": "p_B = clip(p_A + b_player, 0.01, 0.99); unknown/absent player uses b_player = 0 so p_B = p_A",
             "final": "p_final = sigmoid(logit(clip(p_base, 1e-6, 1 - 1e-6)) + shift), with shift = 0 when clutch_shift=False",
-            "shift_scope_note": (
-                "no detectable difference between 2-point and 3-point shifts at this sample size; "
-                "the simulator uses one overall shift in v1"
-            ),
+            "shift_scope_note": shift_scope_note,
             "p_b_clip_low": P_CLIP_LOW,
             "p_b_clip_high": P_CLIP_HIGH,
             "logit_clip_eps": LOGIT_CLIP_EPS,
@@ -510,7 +522,13 @@ def main() -> None:
 
     print("\n[5] Writing manifest.json …")
     manifest = build_manifest(
-        all_shots, best_cfg, n_estimators, trees_per_fold, det_check, offsets_summary
+        all_shots,
+        best_cfg,
+        n_estimators,
+        trees_per_fold,
+        det_check,
+        offsets_summary,
+        shift_scope_note=shift_payload["exploratory"]["warning"],
     )
     manifest_path = EXPORT_DIR / "manifest.json"
     with open(manifest_path, "w") as f:
