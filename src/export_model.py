@@ -200,6 +200,68 @@ def bootstrap_logit_shift(
     }
 
 
+def bootstrap_logit_shift_diff(
+    clutch_df: pd.DataFrame,
+    prob_col: str = "p_B",
+    n_resamples: int = N_BOOT,
+    seed: int = RNG_SEED,
+) -> dict[str, Any]:
+    """Estimate exploratory 3PT minus 2PT logit-shift difference via paired game bootstrap.
+
+    Resamples whole GAME_IDs across all clutch games and computes both shifts on
+    the same resampled games in each iteration.
+    """
+    game_ids = clutch_df["GAME_ID"].astype(str).values
+    y = clutch_df[TARGET].astype(float).values
+    p = clutch_df[prob_col].astype(float).values
+    is_2pt = (clutch_df["SHOT_VALUE"] == 2).values
+    is_3pt = (clutch_df["SHOT_VALUE"] == 3).values
+
+    shift_2pt = fit_logit_shift(p[is_2pt], y[is_2pt])
+    shift_3pt = fit_logit_shift(p[is_3pt], y[is_3pt])
+    point_diff = shift_3pt - shift_2pt
+
+    unique_games = np.sort(np.unique(game_ids))
+    n_games = len(unique_games)
+    game_2pt_idx = (
+        pd.DataFrame({"game": game_ids[is_2pt], "idx": np.where(is_2pt)[0]})
+        .groupby("game")["idx"]
+        .apply(np.array)
+        .to_dict()
+    )
+    game_3pt_idx = (
+        pd.DataFrame({"game": game_ids[is_3pt], "idx": np.where(is_3pt)[0]})
+        .groupby("game")["idx"]
+        .apply(np.array)
+        .to_dict()
+    )
+
+    rng = np.random.default_rng(seed)
+    boot_diffs = np.empty(n_resamples, dtype=float)
+    empty_idx = np.empty(0, dtype=np.int64)
+    for b in range(n_resamples):
+        sampled_games = rng.choice(unique_games, size=n_games, replace=True)
+        idx_2 = np.concatenate([game_2pt_idx.get(g, empty_idx) for g in sampled_games])
+        idx_3 = np.concatenate([game_3pt_idx.get(g, empty_idx) for g in sampled_games])
+        s2 = fit_logit_shift(p[idx_2], y[idx_2])
+        s3 = fit_logit_shift(p[idx_3], y[idx_3])
+        boot_diffs[b] = s3 - s2
+
+    ci_lower = float(np.percentile(boot_diffs, 2.5))
+    ci_upper = float(np.percentile(boot_diffs, 97.5))
+
+    return {
+        "label": "exploratory_3pt_minus_2pt_model_b",
+        "diff_logit": round(float(point_diff), 6),
+        "ci_lower_logit": round(ci_lower, 6),
+        "ci_upper_logit": round(ci_upper, 6),
+        "std_err_logit": round(float(np.std(boot_diffs, ddof=1)), 6),
+        "n_shots_2pt": int(is_2pt.sum()),
+        "n_shots_3pt": int(is_3pt.sum()),
+        "n_games_pool": int(n_games),
+    }
+
+
 def build_clutch_shift_payload(oof_df: pd.DataFrame) -> dict[str, Any]:
     """Estimate overall and exploratory 2PT/3PT clutch shifts for Model A and Model B."""
     clutch = oof_df[oof_df["SET_LABEL"] == "CLUTCH"].copy()
@@ -213,6 +275,7 @@ def build_clutch_shift_payload(oof_df: pd.DataFrame) -> dict[str, Any]:
     exp_a_3pt = bootstrap_logit_shift(clutch_3pt, "p_A")
     exp_b_2pt = bootstrap_logit_shift(clutch_2pt, "p_B")
     exp_b_3pt = bootstrap_logit_shift(clutch_3pt, "p_B")
+    exp_b_diff = bootstrap_logit_shift_diff(clutch, "p_B")
 
     with open(DOCS_DIR / "predictive_comparison.json") as f:
         pred_comp = json.load(f)
@@ -228,7 +291,7 @@ def build_clutch_shift_payload(oof_df: pd.DataFrame) -> dict[str, Any]:
                 "regression of SHOT_MADE_FLAG on offset logit(clip(p_base, 1e-6, 1 - 1e-6)) "
                 "over all 7,104 CLUTCH shots using out-of-fold baseline probabilities. "
                 "This is a descriptive gap bundling defense, fatigue, shot selection "
-                "within shot type, and shooter composition — not a causal pressure effect."
+                "within shot type, and shooter composition — not a causal effect."
             ),
             "app_uses_single_shift_in_v1": True,
             "n_bootstrap": N_BOOT,
@@ -248,14 +311,15 @@ def build_clutch_shift_payload(oof_df: pd.DataFrame) -> dict[str, Any]:
         },
         "exploratory": {
             "warning": (
-                "Exploratory breakdown by SHOT_VALUE; the simulator uses one overall "
-                "shift in v1. If the 2PT or 3PT interval includes the overall shift, "
-                "the data does not support separate shifts."
+                "Exploratory breakdown by SHOT_VALUE: no detectable difference between "
+                "2-point and 3-point shifts at this sample size; the simulator uses "
+                "one overall shift in v1."
             ),
             "model_a_2pt": exp_a_2pt,
             "model_a_3pt": exp_a_3pt,
             "model_b_2pt": exp_b_2pt,
             "model_b_3pt": exp_b_3pt,
+            "model_b_3pt_minus_2pt": exp_b_diff,
         },
     }
 
@@ -301,6 +365,10 @@ def build_manifest(
             "model_a": "p_A = Model A XGBoost predict_proba(X)[:, 1]",
             "model_b": "p_B = clip(p_A + b_player, 0.01, 0.99); unknown/absent player uses b_player = 0 so p_B = p_A",
             "final": "p_final = sigmoid(logit(clip(p_base, 1e-6, 1 - 1e-6)) + shift), with shift = 0 when clutch_shift=False",
+            "shift_scope_note": (
+                "no detectable difference between 2-point and 3-point shifts at this sample size; "
+                "the simulator uses one overall shift in v1"
+            ),
             "p_b_clip_low": P_CLIP_LOW,
             "p_b_clip_high": P_CLIP_HIGH,
             "logit_clip_eps": LOGIT_CLIP_EPS,
@@ -340,7 +408,7 @@ def build_manifest(
             "Single season only (2025-26 NBA regular season).",
             "No defender tracking, closest-defender distance, or shot-clock data.",
             (
-                "The clutch shift is a descriptive gap, not a causal pressure effect; "
+                "The clutch shift is a descriptive gap, not a causal effect; "
                 "it bundles defensive intensity, fatigue, shot selection within shot type, "
                 "and shooter composition."
             ),
@@ -354,6 +422,10 @@ def build_manifest(
                 "using out-of-fold residuals, so players with few shots are shrunk more "
                 "toward the grand mean, and the 10 players with zero regular-play shots "
                 "are absent from player_offsets.csv and receive offset 0.0."
+            ),
+            (
+                "Treating the player offsets as fixed when bootstrapping the clutch shift "
+                "slightly understates the uncertainty of the Model B shift."
             ),
         ],
     }
@@ -428,6 +500,11 @@ def main() -> None:
         f"95% CI [{sb['ci_lower_logit']:+.6f}, {sb['ci_upper_logit']:+.6f}] "
         f"(Phase 3b folds: [{comp['fold_min_logit']:+.5f}, {comp['fold_max_logit']:+.5f}], "
         f"within_range={comp['within_fold_range']})"
+    )
+    ed = shift_payload["exploratory"]["model_b_3pt_minus_2pt"]
+    print(
+        f"    Exploratory 3PT-2PT (Model B): {ed['diff_logit']:+.6f} "
+        f"95% CI [{ed['ci_lower_logit']:+.6f}, {ed['ci_upper_logit']:+.6f}]"
     )
     print(f"    Saved -> {shift_path.relative_to(ROOT)} ({shift_path.stat().st_size:,} bytes)")
 

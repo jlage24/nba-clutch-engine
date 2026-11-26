@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0.0",
-  "created_at_utc": "2026-11-26T12:48:50.419055+00:00",
+  "created_at_utc": "2026-11-26T12:55:50.895040+00:00",
   "model_description": "Descriptive shot-make probability model for NBA simulator (Phase 4a). Baseline Model A fitted on regular-play shots only; Model B adds shrunk per-player regular-play offsets; optional clutch shift adds a descriptive constant logit-scale offset estimated from clutch out-of-fold residuals.",
   "features": [
     "LOC_X",
@@ -45,6 +45,7 @@
     "model_a": "p_A = Model A XGBoost predict_proba(X)[:, 1]",
     "model_b": "p_B = clip(p_A + b_player, 0.01, 0.99); unknown/absent player uses b_player = 0 so p_B = p_A",
     "final": "p_final = sigmoid(logit(clip(p_base, 1e-6, 1 - 1e-6)) + shift), with shift = 0 when clutch_shift=False",
+    "shift_scope_note": "no detectable difference between 2-point and 3-point shifts at this sample size; the simulator uses one overall shift in v1",
     "p_b_clip_low": 0.01,
     "p_b_clip_high": 0.99,
     "logit_clip_eps": 1e-06
@@ -111,8 +112,9 @@
   "limitations": [
     "Single season only (2025-26 NBA regular season).",
     "No defender tracking, closest-defender distance, or shot-clock data.",
-    "The clutch shift is a descriptive gap, not a causal pressure effect; it bundles defensive intensity, fatigue, shot selection within shot type, and shooter composition.",
+    "The clutch shift is a descriptive gap, not a causal effect; it bundles defensive intensity, fatigue, shot selection within shot type, and shooter composition.",
     "The clutch shift was estimated using out-of-fold p_A/p_B from models trained on 80% of games, whereas the exported Model A is fitted on 100% of regular-play shots (a second-order difference).",
-    "Player offsets in the export are estimated from all regular-play shots using out-of-fold residuals, so players with few shots are shrunk more toward the grand mean, and the 10 players with zero regular-play shots are absent from player_offsets.csv and receive offset 0.0."
+    "Player offsets in the export are estimated from all regular-play shots using out-of-fold residuals, so players with few shots are shrunk more toward the grand mean, and the 10 players with zero regular-play shots are absent from player_offsets.csv and receive offset 0.0.",
+    "Treating the player offsets as fixed when bootstrapping the clutch shift slightly understates the uncertainty of the Model B shift."
   ]
 }

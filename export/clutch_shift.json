@@ -1,6 +1,6 @@
 {
   "meta": {
-    "description": "Descriptive constant logit-scale clutch shift: intercept of logistic regression of SHOT_MADE_FLAG on offset logit(clip(p_base, 1e-6, 1 - 1e-6)) over all 7,104 CLUTCH shots using out-of-fold baseline probabilities. This is a descriptive gap bundling defense, fatigue, shot selection within shot type, and shooter composition \u2014 not a causal pressure effect.",
+    "description": "Descriptive constant logit-scale clutch shift: intercept of logistic regression of SHOT_MADE_FLAG on offset logit(clip(p_base, 1e-6, 1 - 1e-6)) over all 7,104 CLUTCH shots using out-of-fold baseline probabilities. This is a descriptive gap bundling defense, fatigue, shot selection within shot type, and shooter composition \u2014 not a causal effect.",
     "app_uses_single_shift_in_v1": true,
     "n_bootstrap": 2000,
     "bootstrap_method": "game-level cluster bootstrap (resample GAME_IDs), 95% percentile CI",
@@ -38,7 +38,7 @@
     "within_fold_range": true
   },
   "exploratory": {
-    "warning": "Exploratory breakdown by SHOT_VALUE; the simulator uses one overall shift in v1. If the 2PT or 3PT interval includes the overall shift, the data does not support separate shifts.",
+    "warning": "Exploratory breakdown by SHOT_VALUE: no detectable difference between 2-point and 3-point shifts at this sample size; the simulator uses one overall shift in v1.",
     "model_a_2pt": {
       "shift_logit": -0.082224,
       "ci_lower_logit": -0.139883,
@@ -70,6 +70,16 @@
       "std_err_logit": 0.040897,
       "n_shots": 2858,
       "n_games": 501
+    },
+    "model_b_3pt_minus_2pt": {
+      "label": "exploratory_3pt_minus_2pt_model_b",
+      "diff_logit": -0.116925,
+      "ci_lower_logit": -0.217228,
+      "ci_upper_logit": -0.017297,
+      "std_err_logit": 0.05099,
+      "n_shots_2pt": 4246,
+      "n_shots_3pt": 2858,
+      "n_games_pool": 543
     }
   }
 }
