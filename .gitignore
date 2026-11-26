@@ -15,6 +15,8 @@ data/
 *.csv
 *.json
 !docs/*.json
+!export/*.json
+!export/*.csv
 
 # Model binaries and exported models
 models/
