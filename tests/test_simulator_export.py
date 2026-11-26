@@ -54,12 +54,12 @@ def test_load_export_exposes_shift_and_schema(exported_model: ExportedModel) -> 
 
     diff_entry = exported_model.clutch_shift_info["exploratory"]["model_b_3pt_minus_2pt"]
     assert diff_entry["ci_lower_logit"] < diff_entry["diff_logit"] < diff_entry["ci_upper_logit"]
-    assert "no detectable difference between 2-point and 3-point shifts at this sample size" in (
-        exported_model.clutch_shift_info["exploratory"]["warning"]
-    )
-    assert "no detectable difference between 2-point and 3-point shifts at this sample size" in (
-        exported_model.manifest["prediction_formula"]["shift_scope_note"]
-    )
+    assert -1.0 <= diff_entry["corr_2pt_3pt_bootstrap"] <= 1.0
+    expected_prefix = "Exploratory, not pre-specified: in this cut the 3-point clutch shift is more negative than the 2-point shift"
+    assert expected_prefix in exported_model.clutch_shift_info["exploratory"]["warning"]
+    assert expected_prefix in exported_model.manifest["prediction_formula"]["shift_scope_note"]
+    assert "no detectable difference" not in exported_model.clutch_shift_info["exploratory"]["warning"]
+    assert "no detectable difference" not in exported_model.manifest["prediction_formula"]["shift_scope_note"]
 
 
 def test_load_export_rejects_feature_mismatch(tmp_path: Path) -> None:
