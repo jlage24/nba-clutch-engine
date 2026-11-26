@@ -52,6 +52,15 @@ def test_load_export_exposes_shift_and_schema(exported_model: ExportedModel) -> 
     assert lo_a < exported_model.clutch_shift_a < hi_a < 0.0
     assert lo_b < exported_model.clutch_shift_b < hi_b < 0.0
 
+    diff_entry = exported_model.clutch_shift_info["exploratory"]["model_b_3pt_minus_2pt"]
+    assert diff_entry["ci_lower_logit"] < diff_entry["diff_logit"] < diff_entry["ci_upper_logit"]
+    assert "no detectable difference between 2-point and 3-point shifts at this sample size" in (
+        exported_model.clutch_shift_info["exploratory"]["warning"]
+    )
+    assert "no detectable difference between 2-point and 3-point shifts at this sample size" in (
+        exported_model.manifest["prediction_formula"]["shift_scope_note"]
+    )
+
 
 def test_load_export_rejects_feature_mismatch(tmp_path: Path) -> None:
     """load_export raises ValueError if model_a.json feature order disagrees with manifest.json."""
