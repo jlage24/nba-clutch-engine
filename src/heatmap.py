@@ -453,7 +453,7 @@ def lookup_cell(
 _METRIC_SPEC = {
     "p_make": ("Make probability", "0.0%", 0.15, 0.85),
     "xp": ("Expected points (xP)", "0.00", 0.50, 1.75),
-    "v": ("End-state value (V)", "0.000", 0.00, 1.00),
+    "v": ("Outcome score", "0.00", 0.00, 1.00),
 }
 
 
@@ -463,12 +463,17 @@ def render_court_heatmap(
     highlight_xy: Optional[tuple[float, float]] = None,
     cmap: str = "viridis",
     figsize: tuple[float, float] = (6.8, 5.8),
+    bg_color: str = "#090f1a",
+    court_color: str = "#cbd5e1",
+    mask_color: str = "#162033",
+    text_color: str = "#f1f5f9",
+    highlight_color: str = "#cd3a29",
 ) -> matplotlib.figure.Figure:
     """Render a half-court heatmap figure using ``src/court.py:draw_court``."""
     if metric not in _METRIC_SPEC:
         raise ValueError(f"Unknown metric {metric!r}. Expected one of {tuple(_METRIC_SPEC)}.")
     if metric == "v" and not heatmap.gate_open:
-        raise ValueError("End-state value V is unavailable when the decision gate is closed.")
+        raise ValueError("Outcome score is unavailable when the decision gate is closed.")
 
     values = getattr(heatmap, metric)
     label, _, default_vmin, default_vmax = _METRIC_SPEC[metric]
@@ -483,8 +488,9 @@ def render_court_heatmap(
     else:
         vmin, vmax = default_vmin, default_vmax
 
-    fig, ax = plt.subplots(figsize=figsize)
-    cmap_obj = plt.get_cmap(cmap).with_extremes(bad="#f4f5f7")
+    fig, ax = plt.subplots(figsize=figsize, facecolor=bg_color)
+    ax.set_facecolor(bg_color)
+    cmap_obj = plt.get_cmap(cmap).with_extremes(bad=mask_color)
 
     img = ax.imshow(
         values.T,
@@ -502,22 +508,34 @@ def render_court_heatmap(
         aspect="equal",
         zorder=0,
     )
-    draw_court(ax=ax, color="#1f2937", lw=1.6)
+    draw_court(ax=ax, color=court_color, lw=1.6)
 
     if highlight_xy is not None:
         hx, hy = highlight_xy
         ax.scatter(
             [hx],
             [hy],
-            s=110,
+            s=140,
             facecolors="none",
-            edgecolors="#ef4444",
-            linewidths=2.2,
+            edgecolors=text_color,
+            linewidths=2.4,
             zorder=5,
         )
-        ax.scatter([hx], [hy], s=20, color="#ef4444", zorder=5)
+        ax.scatter(
+            [hx],
+            [hy],
+            s=75,
+            facecolors="none",
+            edgecolors=highlight_color,
+            linewidths=2.0,
+            zorder=6,
+        )
+        ax.scatter([hx], [hy], s=18, color=highlight_color, zorder=7)
 
     cbar = fig.colorbar(img, ax=ax, fraction=0.042, pad=0.02)
-    cbar.set_label(label)
+    cbar.set_label(label, color=text_color)
+    cbar.ax.yaxis.set_tick_params(color=text_color)
+    plt.setp(cbar.ax.get_yticklabels(), color=text_color)
+    cbar.outline.set_edgecolor(court_color)
     fig.tight_layout()
     return fig

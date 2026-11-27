@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from src.decision_layer import DecisionResult  # noqa: E402
+from src.decision_layer import DecisionResult, GameState  # noqa: E402
 from src.heatmap import (  # noqa: E402
     MIN_GROUP_WEIGHT_PER_1000,
     TYPICAL_MIX_KEY,
@@ -32,23 +32,28 @@ APP_DISCLAIMER = (
 )
 NO_SHOOTER_LABEL = "No shooter"
 SHOOTER_NOTE = (
-    "Shooter adjustments are shrunk single-season estimates from normal play "
-    "(players with few shots are pulled toward zero); no player-specific clutch effect "
-    "is modelled, and this app is not a ranking of players."
+    "Shooter adjustments are shrunk single-season estimates from normal play. "
+    "Low-volume players pull toward zero, and this app is not a ranking of players."
 )
 CUSTOM_SHOT_RARE_WARNING = (
     "This shot type is very rare at this distance; the model is extrapolating."
 )
 MAP_TYPICAL_MIX_CAPTION = (
-    "Typical mix is the average over the shot types seen at that distance; real shots at "
-    "the same spot differ. Small steps between neighbouring cells come from the model "
-    "(distance is measured in whole feet and the model splits on thresholds), not from the data."
+    "Typical mix averages the non-putback shot types seen at that distance; real shots "
+    "at the same spot differ."
 )
-V_DEFINITION_CAPTION = (
-    'V counts "ahead" as 1, "tied" as the overtime value, and "behind" as 0.'
+MAP_MODEL_STEPS_CAPTION = (
+    "Small steps between neighbouring cells come from the model (distance is measured "
+    "in whole feet and the model splits on thresholds), not from the data."
+)
+OUTCOME_SCORE_TOOLTIP = (
+    "Ahead counts 1, tied counts the overtime value, behind counts 0 (called V in docs)."
+)
+END_STATE_CAPTION = (
+    "Shares show ahead, tied or behind after the shot, if nothing else happens."
 )
 SENSITIVITY_CAPTION = (
-    "Sensitivity to the clutch shift only — not a confidence interval for make probability."
+    "Sensitivity to the clutch shift only, not a confidence interval for make probability."
 )
 
 PRESET_ORDER = [
@@ -67,11 +72,37 @@ DEFAULT_PRESET_KEYS = [
     "restricted_area",
 ]
 
+EXAMPLE_SCENARIOS: list[tuple[str, int, int, int]] = [
+    ("Down 3 · 8 s", 4, 8, -3),
+    ("Down 2 · 8 s", 4, 8, -2),
+    ("Down 1 · 6 s", 4, 6, -1),
+    ("Tied · 5 s", 4, 5, 0),
+]
+
 SHIFT_MODE_OPTIONS = {
     "Off": "none",
     "Overall (default)": "overall",
     "By shot type (exploratory)": "by_shot_type",
 }
+
+
+def format_state_headline(state: GameState) -> str:
+    """Format the live game state as a concise page headline."""
+    if state.margin < 0:
+        margin_text = f"Down {abs(state.margin)}"
+    elif state.margin == 0:
+        margin_text = "Tied"
+    else:
+        margin_text = f"Up {state.margin}"
+
+    if state.period == 4:
+        period_text = "Period 4"
+    elif state.period == 5:
+        period_text = "Overtime"
+    else:
+        period_text = f"Period {state.period}"
+
+    return f"{margin_text} · {int(round(state.time_left_sec))} s left · {period_text}"
 
 
 def build_preset_catalog(presets: dict[str, dict[str, Any]]) -> tuple[list[str], dict[str, str]]:
@@ -117,11 +148,10 @@ def format_exploratory_shift_note(clutch_shift_info: dict[str, Any]) -> str:
     """Plain-language caution for the exploratory 2PT vs. 3PT clutch shift cut."""
     diff_info = clutch_shift_info["exploratory"]["model_b_3pt_minus_2pt"]
     return (
-        "Exploratory, not pre-specified: in this cut the 3-point clutch shift is more "
-        f"negative than the 2-point shift (Model B 3PT minus 2PT = "
-        f"{diff_info['diff_logit']:.3f} logit, 95% bootstrap interval "
+        "Exploratory cut: 3PT minus 2PT shift is "
+        f"{diff_info['diff_logit']:.3f} logit (95% bootstrap interval "
         f"{diff_info['ci_lower_logit']:.3f} to {diff_info['ci_upper_logit']:.3f}; "
-        "one of several exploratory cuts; interval close to zero)."
+        "close to zero)."
     )
 
 
@@ -131,16 +161,15 @@ def format_map_limitation_note(court_defaults: dict[str, Any]) -> str:
     cd = court_defaults["checks"]["cell_centre_diagnostic"]
     mc = pc["max_diff_cell"]
     return (
-        "Limitation notes: Within about 4 ft of the rim, the typical mix can understate "
-        "the average of real shots because the share of dunks depends on location while "
-        f"the mix depends only on distance (largest non-putback 2 ft cell difference: "
-        f"n = {mc['n_shots']} shots, {mc['dunk_share']:.1%} dunks, typical-mix "
-        f"{mc['mean_p_a_typical_mix']:.3f} vs. actual {mc['mean_p_a_actual']:.3f}; "
-        f"weighted mean difference across {pc['n_cells_checked']} cells is "
+        f"Within about 4 ft of the rim, the typical mix can understate real shots because "
+        f"dunk share varies by angle while the mix depends only on distance (largest 2 ft "
+        f"cell gap: {mc['n_shots']} shots, {mc['dunk_share']:.1%} dunks, mix "
+        f"{mc['mean_p_a_typical_mix']:.1%} vs. actual {mc['mean_p_a_actual']:.1%}; "
+        f"weighted mean gap across {pc['n_cells_checked']} cells is "
         f"{pc['weighted_mean_abs_diff']:.4f}). Also, a pointwise map cannot show how "
-        "shots bunch inside a cell (comparing real shots against a 2 ft cell centre gives "
-        f"a weighted mean difference of {cd['weighted_mean_abs_diff']:.4f}, up to "
-        f"{cd['max_abs_diff']:.3f} across {cd['n_cells_ge_threshold']} rim cells >= 0.03)."
+        f"shots bunch inside a cell (2 ft cell-centre comparison gives weighted mean gap "
+        f"{cd['weighted_mean_abs_diff']:.4f}, up to {cd['max_abs_diff']:.3f} across "
+        f"{cd['n_cells_ge_threshold']} rim cells)."
     )
 
 
@@ -155,32 +184,32 @@ def format_flag_messages(meta: dict[str, Any]) -> list[tuple[str, str]]:
             messages.append(
                 (
                     "info",
-                    f"Gate closed: more than {gate_sec:g} s left, so the shot is not "
-                    "treated as the last chance; only make probability and xP are shown.",
+                    f"Gate closed: more than {gate_sec:g} s left, so this is not treated "
+                    "as the last shot. Only make probability and xP are shown.",
                 )
             )
         elif flag == "no_option_changes_end_state":
             messages.append(
                 (
                     "warning",
-                    "No option changes the end state: every selected field goal leaves "
-                    "the same end-state value V, so options are ranked by xP.",
+                    "No option changes the end state: every shot has the same outcome "
+                    "score, so options are ordered by xP.",
                 )
             )
         elif flag == "shift_not_applied_outside_clutch":
             messages.append(
                 (
                     "info",
-                    "Outside the clutch window (period >= 4, <= 300 s left, margin within "
-                    "+/- 5): no clutch shift is applied.",
+                    "Outside the clutch window (period >= 4, <= 300 s left, margin "
+                    "within +/- 5): no clutch shift is applied.",
                 )
             )
         elif flag == "unknown_player_offset_zero":
             messages.append(
                 (
                     "info",
-                    "Selected shooter has no regular-season baseline offset in the export; "
-                    "using league baseline Model A (offset 0).",
+                    "Selected shooter has no regular-season offset; using league "
+                    "baseline (offset 0).",
                 )
             )
     return messages
@@ -194,7 +223,7 @@ def _sorted_result_table(result: DecisionResult) -> pd.DataFrame:
 
 
 def format_decision_table(result: DecisionResult) -> pd.DataFrame:
-    """Format the primary decision-layer table for display."""
+    """Format the compact decision-layer table (5 columns when gate is open)."""
     sorted_df = _sorted_result_table(result)
     gate_open = bool(result.meta["gate_open"])
 
@@ -202,103 +231,168 @@ def format_decision_table(result: DecisionResult) -> pd.DataFrame:
         return pd.DataFrame(
             {
                 "Option": sorted_df["label"],
-                "Make prob.": [f"{v:.1%}" for v in sorted_df["p_make"]],
-                "xP": [f"{v:.2f}" for v in sorted_df["xp"]],
+                "Make prob.": sorted_df["p_make"].astype(float) * 100.0,
+                "xP": sorted_df["xp"].astype(float),
             }
         )
 
     return pd.DataFrame(
         {
             "Option": sorted_df["label"],
-            "Make prob.": [f"{v:.1%}" for v in sorted_df["p_make"]],
-            "xP": [f"{v:.2f}" for v in sorted_df["xp"]],
-            "Ahead": [f"{v:.1%}" for v in sorted_df["p_ahead"]],
-            "Tied": [f"{v:.1%}" for v in sorted_df["p_tied"]],
-            "Behind": [f"{v:.1%}" for v in sorted_df["p_behind"]],
-            "V": [f"{v:.3f}" for v in sorted_df["v"]],
+            "Make prob.": sorted_df["p_make"].astype(float) * 100.0,
+            "xP": sorted_df["xp"].astype(float),
+            "Outcome score": sorted_df["v"].astype(float),
             "Rank": [int(v) for v in sorted_df["rank_v"]],
         }
     )
 
 
 def format_sensitivity_table(result: DecisionResult) -> pd.DataFrame:
-    """Format clutch-shift sensitivity columns (omits V when gate is closed)."""
+    """Format clutch-shift sensitivity columns (omits outcome score when gate closed)."""
     sorted_df = _sorted_result_table(result)
     out = pd.DataFrame(
         {
             "Option": sorted_df["label"],
-            "Make (no shift)": [f"{v:.1%}" for v in sorted_df["p_make_no_shift"]],
-            "Make (low)": [f"{v:.1%}" for v in sorted_df["p_make_shift_low"]],
-            "Make (point)": [f"{v:.1%}" for v in sorted_df["p_make"]],
-            "Make (high)": [f"{v:.1%}" for v in sorted_df["p_make_shift_high"]],
+            "Make (no shift)": sorted_df["p_make_no_shift"].astype(float) * 100.0,
+            "Make (low)": sorted_df["p_make_shift_low"].astype(float) * 100.0,
+            "Make (point)": sorted_df["p_make"].astype(float) * 100.0,
+            "Make (high)": sorted_df["p_make_shift_high"].astype(float) * 100.0,
         }
     )
     if result.meta["gate_open"]:
-        out["V (no shift)"] = [f"{v:.3f}" for v in sorted_df["v_no_shift"]]
-        out["V (low)"] = [f"{v:.3f}" for v in sorted_df["v_shift_low"]]
-        out["V (point)"] = [f"{v:.3f}" for v in sorted_df["v"]]
-        out["V (high)"] = [f"{v:.3f}" for v in sorted_df["v_shift_high"]]
+        out["Score (no shift)"] = sorted_df["v_no_shift"].astype(float)
+        out["Score (low)"] = sorted_df["v_shift_low"].astype(float)
+        out["Score (point)"] = sorted_df["v"].astype(float)
+        out["Score (high)"] = sorted_df["v_shift_high"].astype(float)
     return out
 
 
+def classify_summary_variant(result: DecisionResult) -> str:
+    """Return which summary-sentence variant applies to ``result``."""
+    meta = result.meta
+    if not meta["gate_open"]:
+        return "closed_gate"
+    if meta.get("no_option_changes_end_state"):
+        return "no_option_changes_end_state"
+
+    top = _sorted_result_table(result).iloc[0]
+    p_ahead = float(top["p_ahead"])
+    p_tied = float(top["p_tied"])
+    if p_ahead > 0.0:
+        return "can_lead"
+    if p_tied > 0.0:
+        return "can_tie"
+    return "neither"
+
+
 def format_decision_summary(result: DecisionResult) -> str:
-    """Generate the fixed-template one-paragraph summary from table and meta."""
+    """Generate a concise fixed-template summary from the table and meta."""
     sorted_df = _sorted_result_table(result)
     meta = result.meta
     top = sorted_df.iloc[0]
     top_label = str(top["label"])
+    variant = classify_summary_variant(result)
 
-    if not meta["gate_open"]:
+    if variant == "closed_gate":
         t_left = float(meta["state"]["time_left_sec"])
-        gate = float(meta["time_gate_sec"])
         return (
-            f"With {t_left:g} s left (above the {gate:g} s decision gate), this shot is "
-            "not treated as the last chance, so end-state outcomes (ahead, tied or behind "
-            "after the shot, if nothing else happens) and V are omitted. By expected "
-            f"points, {top_label} leads at {float(top['xp']):.2f} xP "
-            f"({float(top['p_make']):.1%} make probability)."
+            f"With {t_left:g} s left, outcome scores are hidden. "
+            f"{top_label} leads at {float(top['xp']):.2f} xP "
+            f"({float(top['p_make']):.1%} make)."
         )
 
     robust_text = "top option unchanged" if meta["ranking_robust"] else "top option changes"
+    if variant == "no_option_changes_end_state":
+        return (
+            f"Every shot gives the same outcome score ({float(top['v']):.2f}). "
+            f"{top_label} leads by xP at {float(top['xp']):.2f}; {robust_text}."
+        )
+
     gap = meta.get("v_gap_first_second")
     if len(sorted_df) >= 2 and gap is not None:
         second_label = str(sorted_df.iloc[1]["label"])
-        gap_clause = f"a gap of {float(gap):.3f} over {second_label}"
+        gap_part = f", +{float(gap):.2f} over {second_label}"
     else:
-        gap_clause = "no second option selected for comparison"
+        gap_part = ""
+
+    top_v = float(top["v"])
+    if variant == "can_lead":
+        outcome_part = f"{float(top['p_ahead']):.1%} to go ahead"
+    elif variant == "can_tie":
+        outcome_part = f"{float(top['p_tied']):.1%} to tie"
+    else:
+        outcome_part = f"{float(top['p_behind']):.1%} behind"
 
     return (
-        f"{top_label} ranks first with end-state value V = {float(top['v']):.3f} "
-        f"({float(top['p_ahead']):.1%} ahead, {float(top['p_tied']):.1%} tied, "
-        f"{float(top['p_behind']):.1%} behind after the shot, if nothing else happens), "
-        f"with {gap_clause}. Under no shift and the lower and upper ends of the clutch "
-        f"shift (sensitivity to the clutch shift only, not a confidence interval for make "
-        f"probability): {robust_text}."
+        f"{top_label} ranks first with outcome score {top_v:.2f} "
+        f"({outcome_part}{gap_part}). Shift sensitivity: {robust_text}."
     )
 
 
-def render_end_state_bar(result: DecisionResult) -> matplotlib.figure.Figure:
-    """Plot horizontal stacked bars of Ahead, Tied, and Behind percentages."""
+def render_end_state_bar(
+    result: DecisionResult,
+    bg_color: str = "#090f1a",
+    text_color: str = "#f1f5f9",
+) -> matplotlib.figure.Figure:
+    """Plot horizontal stacked bars of Ahead, Tied, and Behind percentages with labels."""
     sorted_df = _sorted_result_table(result).iloc[::-1].reset_index(drop=True)
     labels = sorted_df["label"].tolist()
     ahead = sorted_df["p_ahead"].to_numpy(dtype=float) * 100.0
     tied = sorted_df["p_tied"].to_numpy(dtype=float) * 100.0
     behind = sorted_df["p_behind"].to_numpy(dtype=float) * 100.0
 
-    height = max(2.2, 0.58 * len(labels) + 1.0)
-    fig, ax = plt.subplots(figsize=(7.2, height))
-    y = range(len(labels))
+    height = max(2.2, 0.56 * len(labels) + 0.9)
+    fig, ax = plt.subplots(figsize=(5.6, height), facecolor=bg_color)
+    ax.set_facecolor(bg_color)
+    y = list(range(len(labels)))
 
-    ax.barh(y, ahead, color="#0072B2", label="Ahead")
-    ax.barh(y, tied, left=ahead, color="#E69F00", label="Tied")
-    ax.barh(y, behind, left=ahead + tied, color="#CC79A7", label="Behind")
+    c_ahead = "#38bdf8"
+    c_tied = "#fbbf24"
+    c_behind = "#64748b"
 
-    ax.set_yticks(list(y))
-    ax.set_yticklabels(labels)
+    ax.barh(y, ahead, height=0.58, color=c_ahead, label="Ahead")
+    ax.barh(y, tied, left=ahead, height=0.58, color=c_tied, label="Tied")
+    ax.barh(y, behind, left=ahead + tied, height=0.58, color=c_behind, label="Behind")
+
+    # Label every segment wide enough to avoid clutter so color is never the only cue.
+    for row_idx in range(len(labels)):
+        segments = [
+            (0.0, ahead[row_idx], "#090f1a"),
+            (ahead[row_idx], tied[row_idx], "#090f1a"),
+            (ahead[row_idx] + tied[row_idx], behind[row_idx], "#f1f5f9"),
+        ]
+        for start, width, lbl_color in segments:
+            if width >= 14.0:
+                ax.text(
+                    start + 0.5 * width,
+                    row_idx,
+                    f"{width:.0f}%",
+                    ha="center",
+                    va="center",
+                    color=lbl_color,
+                    fontsize=8.5,
+                    fontweight="bold",
+                )
+
+    ax.set_yticks(y)
+    ax.set_yticklabels(labels, color=text_color, fontsize=9.5)
     ax.set_xlim(0.0, 100.0)
-    ax.set_xlabel("Share after the shot, if nothing else happens (%)")
-    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.24), ncol=3, frameon=False)
+    ax.set_xticks([0, 25, 50, 75, 100])
+    ax.set_xticklabels(["0%", "25%", "50%", "75%", "100%"], color=text_color, fontsize=8.5)
+    ax.tick_params(axis="y", length=0)
+    ax.tick_params(axis="x", colors=text_color)
+    legend = ax.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, 1.24),
+        ncol=3,
+        frameon=False,
+        fontsize=9,
+    )
+    for txt in legend.get_texts():
+        txt.set_color(text_color)
     ax.spines["top"].set_visible(False)
     ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color("#26344d")
+    ax.spines["bottom"].set_color("#26344d")
     fig.tight_layout()
     return fig
