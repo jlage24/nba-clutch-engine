@@ -20,7 +20,7 @@ ALL_SHOTS_PATH = ROOT / "data" / "processed" / "all_shots.parquet"
 RAW_SHOTS_PRESENT = bool(sorted((ROOT / "data").glob("raw_shots_*.parquet")))
 
 EXPECTED_PRESETS = {
-    "restricted_area_layup",
+    "restricted_area",
     "putback",
     "paint",
     "short_mid_range",
@@ -116,6 +116,7 @@ def test_zone_presets_sample_means_match_model_and_targets() -> None:
 )
 def test_zone_presets_match_regular_zone_statistics_on_data() -> None:
     """Stored zone counts, side shares, and zone mean p_A match REGULAR data on disk."""
+    from collections import Counter
     from src.export_zone_presets import BASELINE_FEATURES, _side_shares, _zone_masks, load_regular_shots_with_zones
 
     payload = _load_presets()
@@ -126,10 +127,42 @@ def test_zone_presets_match_regular_zone_statistics_on_data() -> None:
     for name, entry in payload["presets"].items():
         zone_df = reg[masks[name]]
         assert len(zone_df) == entry["n_zone_shots"]
-        mean_zone = float(
-            np.mean(predict_make_probability(model, zone_df[BASELINE_FEATURES], clutch_shift=False))
-        )
+        p_zone = predict_make_probability(model, zone_df[BASELINE_FEATURES], clutch_shift=False)
+        mean_zone = float(np.mean(p_zone))
+        sd_zone = float(np.std(p_zone, ddof=1))
+        se_mean = sd_zone / float(np.sqrt(entry["n_sample"]))
         assert mean_zone == pytest.approx(entry["mean_p_a_zone"], abs=1e-6)
+        assert sd_zone == pytest.approx(entry["sd_p_a_zone"], abs=1e-6)
+        assert se_mean == pytest.approx(entry["se_sample_mean"], abs=1e-6)
         shares = _side_shares(zone_df)
         for side in ("left", "right", "center"):
             assert shares[side] == pytest.approx(entry["side_shares_zone"][side], abs=1e-6)
+
+        # Float-exactness check: every row read back from JSON must match a real REGULAR shot in all_shots.parquet bit-for-bit
+        zone_tuples = Counter(
+            (
+                float(r.LOC_X),
+                float(r.LOC_Y),
+                int(r.SHOT_DISTANCE_FT),
+                float(r.SHOT_ANGLE),
+                int(r.SHOT_VALUE),
+                str(r.ACTION_GROUP),
+                int(r.IS_PUTBACK),
+            )
+            for r in zone_df[BASELINE_FEATURES].itertuples(index=False)
+        )
+        json_tuples = Counter(
+            (
+                row["LOC_X"],
+                row["LOC_Y"],
+                row["SHOT_DISTANCE_FT"],
+                row["SHOT_ANGLE"],
+                row["SHOT_VALUE"],
+                row["ACTION_GROUP"],
+                row["IS_PUTBACK"],
+            )
+            for row in entry["shots"]
+        )
+        # Every sampled row tuple must be present in the zone multiset with <= multiplicity
+        for key, count in json_tuples.items():
+            assert zone_tuples[key] >= count, f"{name}: row {key} not matched exactly in all_shots.parquet"
