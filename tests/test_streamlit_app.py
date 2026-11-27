@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import sys
 import tomllib
+from types import SimpleNamespace
 
 import pandas as pd
 import pytest
@@ -23,13 +24,27 @@ from app.formatting import (
     MAP_MODEL_STEPS_CAPTION,
     MAP_TYPICAL_MIX_CAPTION,
     NO_SHOOTER_LABEL,
+    PERIOD_OPTIONS,
     SHOOTER_NOTE,
+    build_altair_court_chart,
     build_shooter_options,
     classify_summary_variant,
+    format_decision_answer_parts,
     format_decision_summary,
+    format_spot_headline,
+    parse_map_selection,
 )
 from src.decision_layer import DecisionResult, GameState, evaluate_options, load_zone_presets
-from src.heatmap import build_custom_shot_preset, load_court_defaults
+from src.heatmap import (
+    HEATMAP_X_MAX,
+    HEATMAP_X_MIN,
+    HEATMAP_Y_MAX,
+    HEATMAP_Y_MIN,
+    build_custom_shot_preset,
+    compute_heatmap,
+    load_court_defaults,
+    lookup_cell,
+)
 from src.simulator_model import DEFAULT_EXPORT_DIR, load_export
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -96,6 +111,8 @@ def _collect_all_rendered_text(at: AppTest) -> str:
         parts.append(str(el.label))
     for el in at.toggle:
         parts.append(str(el.label))
+    for el in at.number_input:
+        parts.append(str(el.label))
     for el in at.button:
         parts.append(str(el.label))
     for el in at.dataframe:
@@ -122,6 +139,17 @@ def _assert_clean_wording(text: str) -> None:
     )
 
 
+def _assert_no_visitor_jargon(text: str) -> None:
+    """Assert visitor-visible text contains no LOC_X, LOC_Y, cell(s), tenths, or Shift sensitivity."""
+    lowered = text.lower()
+    assert "loc_x" not in lowered, "Visitor UI text must not mention LOC_X."
+    assert "loc_y" not in lowered, "Visitor UI text must not mention LOC_Y."
+    assert not re.search(r"\bcells?\b", lowered), "Visitor UI text must not mention 'cell' or 'cells'."
+    assert "tenths of a foot" not in lowered, "Visitor UI text must not mention 'tenths of a foot'."
+    assert not re.search(r"\btenths?\b", lowered), "Visitor UI text must not mention 'tenths'."
+    assert "shift sensitivity" not in lowered, "Visitor UI text must not mention 'Shift sensitivity'."
+
+
 def _relative_luminance(hex_color: str) -> float:
     h = hex_color.lstrip("#")
     rgb = [int(h[i : i + 2], 16) / 255.0 for i in (0, 2, 4)]
@@ -136,13 +164,27 @@ def _contrast_ratio(hex_a: str, hex_b: str) -> float:
 
 
 def test_1_defaults_headline_examples_and_demo_scenario_1() -> None:
-    """App loads cleanly with state headline, 4 example buttons, 5-col table, and Scenario 1."""
+    """App loads cleanly with state headline, sidebar A8 controls, answer block, and Scenario 1."""
     assert LOGO_PATH.exists() and LOGO_PATH.stat().st_size <= 200_000
 
     at = _run_app()
     assert any(h.value == "Down 3 · 8 s left · Period 4" for h in at.header)
     assert any(APP_DISCLAIMER in c.value for c in at.caption)
     assert any(END_STATE_CAPTION in c.value for c in at.caption)
+
+    period_ctrl = at.sidebar.segmented_control(key="period_label")
+    assert period_ctrl.options == list(PERIOD_OPTIONS.keys())
+    assert period_ctrl.value == "4th quarter"
+    assert int(at.sidebar.number_input(key="time_left_sec").value) == 8
+    margin_slider = at.sidebar.slider(key="margin")
+    assert margin_slider.label == "Score margin (offense minus defense)"
+    assert int(margin_slider.value) == -3
+
+    rendered = _collect_all_rendered_text(at)
+    assert "ties the game" in rendered
+    assert "Next:" in rendered
+    assert "The best option stays the same with or without the clutch adjustment." in rendered
+    assert "+0." not in rendered
 
     df = at.dataframe[0].value
     assert len(df) == 4
@@ -160,16 +202,21 @@ def test_1_defaults_headline_examples_and_demo_scenario_1() -> None:
     assert at.metric[0].value == df.iloc[0]["Option"]
 
     # Clicking an example scenario button updates state and headline cleanly.
-    at.button(key="example_4_6_-1").click().run()
+    at.button(key="example_4th quarter_6_-1").click().run()
     assert not at.exception
     assert any(h.value == "Down 1 · 6 s left · Period 4" for h in at.header)
     assert at.dataframe[0].value.iloc[0]["Option"] == "Restricted Area"
+
+    # Switching Period segmented control to Overtime updates the headline cleanly.
+    at.sidebar.segmented_control(key="period_label").set_value("Overtime").run()
+    assert not at.exception
+    assert any("Overtime" in h.value for h in at.header)
 
 
 def test_2_gate_closed_hides_outcome_score_and_shows_message() -> None:
     """At 40 s left, gate-closed message appears and no outcome score / V values appear."""
     at = _run_app()
-    at.sidebar.slider(key="time_left_sec").set_value(40).run()
+    at.sidebar.number_input(key="time_left_sec").set_value(40).run()
     assert not at.exception
 
     infos = " ".join(el.value for el in at.info)
@@ -186,7 +233,7 @@ def test_3_margin_minus_5_10s_shows_no_option_changes_end_state() -> None:
     """At margin -5 and 10 s left, no-option-changes message appears."""
     at = _run_app()
     at.sidebar.slider(key="margin").set_value(-5)
-    at.sidebar.slider(key="time_left_sec").set_value(10)
+    at.sidebar.number_input(key="time_left_sec").set_value(10)
     at.run()
     assert not at.exception
 
@@ -235,15 +282,15 @@ def test_5_shooter_selection_changes_probs_and_shows_note() -> None:
 
 
 def test_6_custom_shot_smoothing_asymmetric_center_and_a4_crosscheck() -> None:
-    """Custom shot smoothing differs off-centre, matches on LOC_X=0, and matches A4 within 1e-9."""
+    """Custom shot smoothing in feet differs off-centre, matches on center, and matches A4 within 1e-9."""
     model = load_export(DEFAULT_EXPORT_DIR)
     presets = load_zone_presets()
     court_defaults = load_court_defaults()
 
     at = _run_app()
     at.toggle(key="use_custom_shot").set_value(True).run()
-    at.number_input(key="custom_loc_x").set_value(15)
-    at.number_input(key="custom_loc_y").set_value(15)
+    at.number_input(key="custom_x_ft").set_value(1.5)
+    at.number_input(key="custom_y_ft").set_value(1.5)
     at.run()
     assert not at.exception
 
@@ -281,7 +328,7 @@ def test_6_custom_shot_smoothing_asymmetric_center_and_a4_crosscheck() -> None:
             float(res.table.iloc[0]["v"]), abs=1e-9
         )
 
-    at.number_input(key="custom_loc_x").set_value(0).run()
+    at.number_input(key="custom_x_ft").set_value(0.0).run()
     df_center_off = at.dataframe[0].value.copy()
     row_center_off = df_center_off[df_center_off["Option"].str.startswith("Custom")].iloc[0]
 
@@ -302,8 +349,8 @@ def test_custom_shot_rare_distance_warning() -> None:
     """Rare shot type at a distance shows extrapolation caption; common shot type does not."""
     at = _run_app()
     at.toggle(key="use_custom_shot").set_value(True).run()
-    at.number_input(key="custom_loc_x").set_value(0)
-    at.number_input(key="custom_loc_y").set_value(250)
+    at.number_input(key="custom_x_ft").set_value(0.0)
+    at.number_input(key="custom_y_ft").set_value(25.0)
     at.selectbox(key="custom_shot_type").set_value("dunk").run()
     assert not at.exception
 
@@ -317,7 +364,7 @@ def test_custom_shot_rare_distance_warning() -> None:
 
 
 def test_all_five_summary_sentence_variants() -> None:
-    """All summary variants (can_tie, can_lead, neither, no_change, closed_gate) work cleanly."""
+    """All A8 answer-block variants (can_tie, can_lead, neither, no_change, closed_gate) work cleanly."""
     model = load_export(DEFAULT_EXPORT_DIR)
     presets = load_zone_presets()
     opts = ["corner_three", "above_the_break_3", "long_mid_range", "restricted_area"]
@@ -325,28 +372,41 @@ def test_all_five_summary_sentence_variants() -> None:
     # 1. can_tie (Down 3, 8 s)
     res_tie = evaluate_options(GameState(8.0, -3, 4), opts, model=model, presets=presets)
     assert classify_summary_variant(res_tie) == "can_tie"
-    s_tie = format_decision_summary(res_tie)
-    assert "to tie" in s_tie and "outcome score" in s_tie and "top option unchanged" in s_tie
+    m_tie, n_tie, st_tie = format_decision_answer_parts(res_tie)
+    assert "is the best option. It ties the game" in m_tie
+    assert "outcome score" in m_tie
+    assert "+0." not in m_tie and " over " not in m_tie
+    assert n_tie is not None and n_tie.startswith("Next:")
+    assert st_tie == "The best option stays the same with or without the clutch adjustment."
 
     # 2. can_lead (Down 1, 6 s)
     res_lead = evaluate_options(GameState(6.0, -1, 4), opts, model=model, presets=presets)
     assert classify_summary_variant(res_lead) == "can_lead"
-    s_lead = format_decision_summary(res_lead)
-    assert "to go ahead" in s_lead and "outcome score" in s_lead
+    m_lead, n_lead, st_lead = format_decision_answer_parts(res_lead)
+    assert "is the best option. It puts the offense ahead" in m_lead
+    assert "outcome score" in m_lead
+    assert n_lead is not None and n_lead.startswith("Next:")
+    assert st_lead is not None
 
     # 3. no_option_changes_end_state (Down 5, 10 s)
     res_nc = evaluate_options(GameState(10.0, -5, 4), opts, model=model, presets=presets)
     assert classify_summary_variant(res_nc) == "no_option_changes_end_state"
-    s_nc = format_decision_summary(res_nc)
-    assert "same outcome score" in s_nc
+    m_nc, n_nc, st_nc = format_decision_answer_parts(res_nc)
+    assert "No selected shot can tie or take the lead" in m_nc
+    assert "leads in xP" in m_nc
+    assert n_nc is not None and n_nc.startswith("Next:")
+    assert st_nc is not None
 
     # 4. closed_gate (Down 3, 40 s)
     res_closed = evaluate_options(GameState(40.0, -3, 4), opts, model=model, presets=presets)
     assert classify_summary_variant(res_closed) == "closed_gate"
-    s_closed = format_decision_summary(res_closed)
-    assert "outcome scores are hidden" in s_closed
+    m_closed, n_closed, st_closed = format_decision_answer_parts(res_closed)
+    assert "outcome scores are hidden" in m_closed
+    assert "leads in xP" in m_closed
+    assert n_closed is not None and n_closed.startswith("Next:")
+    assert st_closed is None
 
-    # 5. neither (best option has p_ahead == 0 and p_tied == 0 without no_option_changes flag)
+    # 5. neither (p_ahead == 0 and p_tied == 0 without no_option_changes flag, plus unstable ranking branch)
     synthetic = DecisionResult(
         table=pd.DataFrame(
             [
@@ -359,20 +419,34 @@ def test_all_five_summary_sentence_variants() -> None:
                     "p_behind": 1.0,
                     "v": 0.0,
                     "rank_v": 1,
-                }
+                },
+                {
+                    "label": "Option B",
+                    "p_make": 0.35,
+                    "xp": 0.70,
+                    "p_ahead": 0.0,
+                    "p_tied": 0.0,
+                    "p_behind": 1.0,
+                    "v": 0.0,
+                    "rank_v": 2,
+                },
             ]
         ),
         meta={
             "gate_open": True,
             "no_option_changes_end_state": False,
-            "ranking_robust": True,
-            "v_gap_first_second": None,
+            "ranking_robust": False,
+            "v_gap_first_second": 0.0,
             "state": {"time_left_sec": 8.0, "margin": -4, "period": 4},
         },
     )
     assert classify_summary_variant(synthetic) == "neither"
-    s_neither = format_decision_summary(synthetic)
-    assert "100.0% behind" in s_neither and "outcome score" in s_neither
+    m_n, n_n, st_n = format_decision_answer_parts(synthetic)
+    assert "leaves the offense behind 100.0% of the time" in m_n
+    assert "outcome score 0.00" in m_n
+    assert n_n == "Next: Option B, outcome score 0.00 against 0.00."
+    assert st_n == "The best option changes with the clutch adjustment."
+    assert "Option A is the best option." in format_decision_summary(synthetic)
 
 
 def test_7_map_tab_segmented_control_captions_and_gate_disabled() -> None:
@@ -390,36 +464,147 @@ def test_7_map_tab_segmented_control_captions_and_gate_disabled() -> None:
     assert MAP_MODEL_STEPS_CAPTION in captions
     assert "Within about 4 ft of the rim" in captions
 
-    at.sidebar.slider(key="time_left_sec").set_value(40).run()
+    at.sidebar.number_input(key="time_left_sec").set_value(40).run()
     assert not at.exception
     closed_seg = at.segmented_control(key="map_metric")
     assert "Outcome score" not in closed_seg.options
     assert "Outcome score is disabled" in " ".join(i.value for i in at.info)
 
 
-def test_8_wording_scan_and_theme_contrast_ratios() -> None:
-    """Rendered text and literals pass wording/emoji/bold checks and theme contrast >= 4.5:1."""
-    for file_path in (ROOT / "app" / "formatting.py", APP_PATH):
-        tree = ast.parse(file_path.read_text(encoding="utf-8"))
-        literals = [
-            node.value
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Constant) and isinstance(node.value, str)
-        ]
-        _assert_clean_wording("\n".join(literals))
+def test_map_selection_parser_click_inspect_and_use_spot_flow() -> None:
+    """Altair click payloads, manual exact-position edits, and Use-this-spot button stay synchronized."""
+    assert parse_map_selection(None) is None
+    assert parse_map_selection({}) is None
+    assert parse_map_selection({"selection": {"spot": []}}) is None
+    assert parse_map_selection({"selection": {"spot": [{"x_ft": "bad", "y_ft": 1.0}]}}) is None
+    assert parse_map_selection({"selection": {"spot": [{"x_ft": 22.0, "y_ft": 1.0}]}}) == (220.0, 10.0)
+    assert parse_map_selection(SimpleNamespace(selection={"spot": [{"x_ft": -99.0, "y_ft": 99.0}]})) == (
+        HEATMAP_X_MIN,
+        HEATMAP_Y_MAX,
+    )
+    assert parse_map_selection({"spot": [{"x_ft": 99.0, "y_ft": -99.0}]}) == (
+        HEATMAP_X_MAX,
+        HEATMAP_Y_MIN,
+    )
+
+    model = load_export(DEFAULT_EXPORT_DIR)
+    presets = load_zone_presets()
+    court_defaults = load_court_defaults()
 
     at = _run_app()
-    _assert_clean_wording(_collect_all_rendered_text(at))
-
-    at.sidebar.radio(key="shift_mode_label").set_value("By shot type (exploratory)")
-    at.sidebar.slider(key="time_left_sec").set_value(40)
+    # Simulated click on above-the-break three (0.5 ft, 25.5 ft) via map_chart session state.
+    at.session_state["map_chart"] = {"selection": {"spot": [{"x_ft": 0.5, "y_ft": 25.5}]}}
     at.run()
-    _assert_clean_wording(_collect_all_rendered_text(at))
+    assert not at.exception
+    assert float(at.number_input(key="inspect_x_ft").value) == pytest.approx(0.5)
+    assert float(at.number_input(key="inspect_y_ft").value) == pytest.approx(25.5)
+    assert any(
+        h.value == format_spot_headline(25.0, 3) for h in at.subheader
+    ), [h.value for h in at.subheader]
 
-    at.sidebar.slider(key="time_left_sec").set_value(10)
+    # Exact-position edit overrides inspected coordinates and stays in feet.
+    at.number_input(key="inspect_x_ft").set_value(-22.5)
+    at.number_input(key="inspect_y_ft").set_value(0.5)
+    at.run()
+    assert not at.exception
+    hm = compute_heatmap(
+        GameState(8.0, -3, 4),
+        smooth=True,
+        model=model,
+        court_defaults=court_defaults,
+    )
+    expected_spot = lookup_cell(hm, -225.0, 5.0)
+    metric_pairs = {(m.label, m.value) for m in at.metric}
+    assert ("Make probability", f"{expected_spot['p_make']:.1%}") in metric_pairs
+    assert ("Outcome score", f"{expected_spot['v']:.2f}") in metric_pairs
+
+    # Clicking "Use this spot as a custom shot" turns on custom shot with matching coordinates.
+    at.button(key="use_spot_custom").click().run()
+    assert not at.exception
+    assert bool(at.toggle(key="use_custom_shot").value) is True
+    assert float(at.number_input(key="custom_x_ft").value) == pytest.approx(-22.5)
+    assert float(at.number_input(key="custom_y_ft").value) == pytest.approx(0.5)
+
+    custom_row = at.dataframe[0].value
+    custom_row = custom_row[custom_row["Option"].str.startswith("Custom")].iloc[0]
+    custom_preset = build_custom_shot_preset(
+        -225.0,
+        5.0,
+        shot_type="typical_mix",
+        smooth=True,
+        court_defaults=court_defaults,
+        label="Custom (Typical mix)",
+    )
+    expected_res = evaluate_options(
+        state=GameState(8.0, -3, 4),
+        options=["__custom__"],
+        shift_mode="overall",
+        model=model,
+        presets={**presets, "__custom__": custom_preset},
+    )
+    assert float(custom_row["Make prob."]) == pytest.approx(
+        float(expected_res.table.iloc[0]["p_make"]) * 100.0, abs=1e-9
+    )
+
+
+def test_altair_chart_spec_and_layout_properties() -> None:
+    """Altair court spec validates cleanly with bottom legend, court lines, and spot click selection."""
+    model = load_export(DEFAULT_EXPORT_DIR)
+    court_defaults = load_court_defaults()
+    hm = compute_heatmap(
+        GameState(8.0, -3, 4),
+        smooth=True,
+        model=model,
+        court_defaults=court_defaults,
+    )
+    chart = build_altair_court_chart(hm, metric="v", selected_xy_tenths=(220.0, 10.0))
+    spec = chart.to_dict(validate=True)
+    assert len(spec["layer"]) == 6
+    assert spec["layer"][0]["encoding"]["color"]["legend"]["orient"] == "bottom"
+    assert spec["layer"][0]["encoding"]["color"]["scale"]["scheme"] == "viridis"
+    assert spec["params"][0]["name"] == "spot"
+    assert spec["params"][0]["select"]["on"] == "click"
+    assert spec["params"][0]["views"] == [spec["layer"][-1]["name"]]
+
+
+def test_8_wording_scan_and_theme_contrast_ratios() -> None:
+    """Rendered text passes wording/jargon/emoji/bold checks and theme contrast >= 4.5:1."""
+    tree_fmt = ast.parse((ROOT / "app" / "formatting.py").read_text(encoding="utf-8"))
+    fmt_literals = [
+        node.value
+        for node in ast.walk(tree_fmt)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    ]
+    _assert_clean_wording("\n".join(fmt_literals))
+
+    tree_app = ast.parse(APP_PATH.read_text(encoding="utf-8"))
+    app_literals = [
+        node.value
+        for node in ast.walk(tree_app)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    ]
+    _assert_clean_wording("\n".join(app_literals))
+
+    at = _run_app()
+    rendered_default = _collect_all_rendered_text(at)
+    _assert_clean_wording(rendered_default)
+    _assert_no_visitor_jargon(rendered_default)
+
+    at.toggle(key="use_custom_shot").set_value(True)
+    at.sidebar.segmented_control(key="period_label").set_value("Overtime")
+    at.sidebar.radio(key="shift_mode_label").set_value("By shot type (exploratory)")
+    at.sidebar.number_input(key="time_left_sec").set_value(40)
+    at.run()
+    rendered_closed = _collect_all_rendered_text(at)
+    _assert_clean_wording(rendered_closed)
+    _assert_no_visitor_jargon(rendered_closed)
+
+    at.sidebar.number_input(key="time_left_sec").set_value(10)
     at.sidebar.slider(key="margin").set_value(-5)
     at.run()
-    _assert_clean_wording(_collect_all_rendered_text(at))
+    rendered_nc = _collect_all_rendered_text(at)
+    _assert_clean_wording(rendered_nc)
+    _assert_no_visitor_jargon(rendered_nc)
 
     cfg = tomllib.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     theme = cfg["theme"]
@@ -448,7 +633,7 @@ def test_9_app_runs_in_clean_copy_without_data_and_models(tmp_path: Path) -> Non
         "assert len(at.dataframe[0].value) == 4; "
         "assert at.dataframe[0].value.iloc[0]['Option'] == 'Corner Three'; "
         "t0 = time.perf_counter(); "
-        "at.button(key='example_4_8_-2').click().run(); "
+        "at.button(key='example_4th quarter_8_-2').click().run(); "
         "dt = time.perf_counter() - t0; "
         "assert not at.exception, at.exception; "
         "assert any(h.value == 'Down 2 · 8 s left · Period 4' for h in at.header); "

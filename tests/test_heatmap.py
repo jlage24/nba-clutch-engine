@@ -15,12 +15,15 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
+from src.court import draw_court
 from src.decision_layer import GameState, evaluate_options
 from src.heatmap import (
     TYPICAL_MIX_KEY,
     build_custom_shot_preset,
+    build_heatmap_dataframe,
     compute_heatmap,
     get_active_shot_types,
+    get_court_polylines,
     load_court_defaults,
     lookup_cell,
     render_court_heatmap,
@@ -292,6 +295,79 @@ def test_render_court_heatmap_figures(model, court_defaults) -> None:
         fig = render_court_heatmap(hm, metric=metric, highlight_xy=(225.0, 5.0))
         assert len(fig.axes) >= 2
         plt.close(fig)
+
+
+def test_court_polylines_match_draw_court_patches() -> None:
+    """Altair court polylines match all 11 Matplotlib patches from src/court.py:draw_court."""
+    fig, ax = plt.subplots()
+    draw_court(ax)
+    patches = list(ax.patches)
+    assert len(patches) == 11
+
+    expected_parts = [
+        "hoop",
+        "backboard",
+        "outer_paint",
+        "inner_paint",
+        "ft_arc_top",
+        "ft_arc_bottom",
+        "restricted_arc",
+        "left_corner_three",
+        "right_corner_three",
+        "three_point_arc",
+        "boundary",
+    ]
+    poly_tenths = get_court_polylines(units="tenths")
+    poly_feet = get_court_polylines(units="feet")
+
+    assert list(dict.fromkeys(poly_tenths["part"])) == expected_parts
+    assert np.allclose(poly_feet["x"].to_numpy(), poly_tenths["x"].to_numpy() * 0.1)
+    assert np.allclose(poly_feet["y"].to_numpy(), poly_tenths["y"].to_numpy() * 0.1)
+
+    for part_name, patch in zip(expected_parts, patches):
+        sub = poly_tenths[poly_tenths["part"] == part_name]
+        assert not sub.empty
+        verts = patch.get_path().transformed(patch.get_patch_transform()).vertices
+        px_min, py_min = verts[:, 0].min(), verts[:, 1].min()
+        px_max, py_max = verts[:, 0].max(), verts[:, 1].max()
+        assert float(sub["x"].min()) == pytest.approx(float(px_min), abs=0.5)
+        assert float(sub["x"].max()) == pytest.approx(float(px_max), abs=0.5)
+        assert float(sub["y"].min()) == pytest.approx(float(py_min), abs=0.5)
+        assert float(sub["y"].max()) == pytest.approx(float(py_max), abs=0.5)
+        expected_dashed = patch.get_linestyle() in {"--", "dashed"}
+        assert bool(sub["dashed"].iloc[0]) is expected_dashed
+
+    plt.close(fig)
+
+
+def test_build_heatmap_dataframe(model, court_defaults) -> None:
+    """Heatmap DataFrame contains exact unmasked squares in feet matching lookup_cell."""
+    hm_open = compute_heatmap(
+        GameState(8.0, -3, 4),
+        smooth=True,
+        model=model,
+        court_defaults=court_defaults,
+    )
+    df_p = build_heatmap_dataframe(hm_open, "p_make")
+    assert len(df_p) == int(hm_open.mask.sum())
+    assert (df_p["x_ft"] >= -25.0).all() and (df_p["x_ft"] <= 25.0).all()
+    assert (df_p["y_ft"] >= -5.0).all() and (df_p["y_ft"] <= 42.0).all()
+    assert np.allclose(df_p["x1"] - df_p["x0"], 1.0)
+    assert np.allclose(df_p["y1"] - df_p["y0"], 1.0)
+
+    spot = df_p[(df_p["x_ft"] == 22.5) & (df_p["y_ft"] == 0.5)].iloc[0]
+    info = lookup_cell(hm_open, 225.0, 5.0)
+    assert float(spot["value"]) == pytest.approx(info["p_make"], abs=1e-12)
+    assert spot["shot_kind"] == "three-pointer"
+
+    hm_closed = compute_heatmap(
+        GameState(40.0, -3, 4),
+        smooth=True,
+        model=model,
+        court_defaults=court_defaults,
+    )
+    with pytest.raises(ValueError, match="Outcome score"):
+        build_heatmap_dataframe(hm_closed, "v")
 
 
 def test_heatmap_runs_and_fast_in_clean_copy(tmp_path: Path) -> None:
