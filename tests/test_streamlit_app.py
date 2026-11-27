@@ -32,6 +32,7 @@ from app.formatting import (
     format_decision_answer_parts,
     format_decision_summary,
     format_spot_headline,
+    format_spot_position,
     parse_map_selection,
 )
 from src.decision_layer import DecisionResult, GameState, evaluate_options, load_zone_presets
@@ -140,7 +141,7 @@ def _assert_clean_wording(text: str) -> None:
 
 
 def _assert_no_visitor_jargon(text: str) -> None:
-    """Assert visitor-visible text contains no LOC_X, LOC_Y, cell(s), tenths, or Shift sensitivity."""
+    """Assert visitor-visible text contains no internal terms, 'depth', or position 'left-right'."""
     lowered = text.lower()
     assert "loc_x" not in lowered, "Visitor UI text must not mention LOC_X."
     assert "loc_y" not in lowered, "Visitor UI text must not mention LOC_Y."
@@ -148,6 +149,15 @@ def _assert_no_visitor_jargon(text: str) -> None:
     assert "tenths of a foot" not in lowered, "Visitor UI text must not mention 'tenths of a foot'."
     assert not re.search(r"\btenths?\b", lowered), "Visitor UI text must not mention 'tenths'."
     assert "shift sensitivity" not in lowered, "Visitor UI text must not mention 'Shift sensitivity'."
+    assert "depth" not in lowered, "Visitor UI text must not mention 'depth'."
+    without_smoothing = (
+        lowered.replace("left-right differences", "").replace(
+            "left-right coordinate differences", ""
+        )
+    )
+    assert "left-right" not in without_smoothing, (
+        "Visitor position UI text must not use 'left-right'."
+    )
 
 
 def _relative_luminance(hex_color: str) -> float:
@@ -472,7 +482,7 @@ def test_7_map_tab_segmented_control_captions_and_gate_disabled() -> None:
 
 
 def test_map_selection_parser_click_inspect_and_use_spot_flow() -> None:
-    """Altair click payloads, manual exact-position edits, and Use-this-spot button stay synchronized."""
+    """Altair click payloads, plain spot position copy, exact-position edits, and Use-this-spot stay synchronized."""
     assert parse_map_selection(None) is None
     assert parse_map_selection({}) is None
     assert parse_map_selection({"selection": {"spot": []}}) is None
@@ -487,11 +497,26 @@ def test_map_selection_parser_click_inspect_and_use_spot_flow() -> None:
         HEATMAP_Y_MIN,
     )
 
+    assert format_spot_position(-9.5, 4.5) == "9.5 ft left of the basket · 4.5 ft in front of it"
+    assert format_spot_position(22.5, -2.0) == "22.5 ft right of the basket · 2.0 ft behind it"
+    assert format_spot_position(0.0, 25.0) == "in line with the basket · 25.0 ft in front of it"
+    assert format_spot_position(-22.5, 0.0) == "22.5 ft left of the basket · in line with the hoop"
+    assert format_spot_position(0.0, 0.0) == "in line with the basket · in line with the hoop"
+
     model = load_export(DEFAULT_EXPORT_DIR)
     presets = load_zone_presets()
     court_defaults = load_court_defaults()
 
     at = _run_app()
+    assert (
+        at.number_input(key="inspect_x_ft").label
+        == "Left or right of the basket (ft, negative = left)"
+    )
+    assert (
+        at.number_input(key="inspect_y_ft").label
+        == "In front of the basket (ft, negative = behind it)"
+    )
+
     # Simulated click on above-the-break three (0.5 ft, 25.5 ft) via map_chart session state.
     at.session_state["map_chart"] = {"selection": {"spot": [{"x_ft": 0.5, "y_ft": 25.5}]}}
     at.run()
@@ -501,8 +526,19 @@ def test_map_selection_parser_click_inspect_and_use_spot_flow() -> None:
     assert any(
         h.value == format_spot_headline(25.0, 3) for h in at.subheader
     ), [h.value for h in at.subheader]
+    assert any(
+        c.value == "0.5 ft right of the basket · 25.5 ft in front of it" for c in at.caption
+    )
 
-    # Exact-position edit overrides inspected coordinates and stays in feet.
+    # Exact-position edit overrides inspected coordinates and checks plain relative wording.
+    at.number_input(key="inspect_x_ft").set_value(-9.5)
+    at.number_input(key="inspect_y_ft").set_value(4.5)
+    at.run()
+    assert not at.exception
+    assert any(
+        c.value == "9.5 ft left of the basket · 4.5 ft in front of it" for c in at.caption
+    )
+
     at.number_input(key="inspect_x_ft").set_value(-22.5)
     at.number_input(key="inspect_y_ft").set_value(0.5)
     at.run()
@@ -548,7 +584,7 @@ def test_map_selection_parser_click_inspect_and_use_spot_flow() -> None:
 
 
 def test_altair_chart_spec_and_layout_properties() -> None:
-    """Altair court spec validates cleanly with bottom legend, court lines, and spot click selection."""
+    """Altair court spec validates equal 470/500 x/y aspect, exact court domains, no cell borders, and selection."""
     model = load_export(DEFAULT_EXPORT_DIR)
     court_defaults = load_court_defaults()
     hm = compute_heatmap(
@@ -559,9 +595,24 @@ def test_altair_chart_spec_and_layout_properties() -> None:
     )
     chart = build_altair_court_chart(hm, metric="v", selected_xy_tenths=(220.0, 10.0))
     spec = chart.to_dict(validate=True)
+    assert spec["height"] / spec["width"] == pytest.approx(470.0 / 500.0, rel=0.0, abs=1e-12)
+    assert spec["autosize"] == {"type": "pad", "contains": "padding"}
     assert len(spec["layer"]) == 6
-    assert spec["layer"][0]["encoding"]["color"]["legend"]["orient"] == "bottom"
-    assert spec["layer"][0]["encoding"]["color"]["scale"]["scheme"] == "viridis"
+
+    heat_layer = spec["layer"][0]
+    assert heat_layer["mark"]["strokeWidth"] == 0
+    assert heat_layer["mark"]["clip"] is True
+    assert heat_layer["encoding"]["x"]["scale"]["domain"] == [-25.0, 25.0]
+    assert heat_layer["encoding"]["y"]["scale"]["domain"] == [-4.75, 42.25]
+    assert heat_layer["encoding"]["color"]["legend"]["orient"] == "bottom"
+    assert heat_layer["encoding"]["color"]["scale"]["scheme"] == "viridis"
+
+    for layer in spec["layer"][1:]:
+        assert layer["encoding"]["x"]["scale"]["domain"] == [-25.0, 25.0]
+        assert layer["encoding"]["y"]["scale"]["domain"] == [-4.75, 42.25]
+
+    tooltip_titles = [t["title"].lower() for t in spec["layer"][-1]["encoding"]["tooltip"]]
+    assert all("depth" not in t and "left-right" not in t for t in tooltip_titles)
     assert spec["params"][0]["name"] == "spot"
     assert spec["params"][0]["select"]["on"] == "click"
     assert spec["params"][0]["views"] == [spec["layer"][-1]["name"]]
