@@ -56,8 +56,8 @@ BASELINE_FEATURES = [
 
 PRESET_SPECS: list[tuple[str, str, str]] = [
     (
-        "restricted_area_layup",
-        "Restricted-Area Layup",
+        "restricted_area",
+        "Restricted Area",
         "REGULAR & SHOT_ZONE_BASIC == 'Restricted Area' & IS_PUTBACK == 0 & SHOT_VALUE == 2",
     ),
     (
@@ -130,7 +130,7 @@ def load_regular_shots_with_zones() -> pd.DataFrame:
 
 def _zone_masks(reg: pd.DataFrame) -> dict[str, pd.Series]:
     return {
-        "restricted_area_layup": (
+        "restricted_area": (
             (reg["SHOT_ZONE_BASIC"] == "Restricted Area")
             & (reg["IS_PUTBACK"] == 0)
             & (reg["SHOT_VALUE"] == 2)
@@ -280,6 +280,7 @@ def build_zone_presets(
 
         p_zone = predict_make_probability(model, zone_df[BASELINE_FEATURES], clutch_shift=False)
         mean_p_zone = float(np.mean(p_zone))
+        sd_p_zone = float(np.std(p_zone, ddof=1))
 
         n_draw = min(INITIAL_SAMPLE_SIZE, n_zone)
         idx = rng.choice(n_zone, size=n_draw, replace=False)
@@ -306,6 +307,9 @@ def build_zone_presets(
                 f"after {n_draw} rows: {abs_diff:.6f}."
             )
 
+        se_sample_mean = sd_p_zone / float(np.sqrt(n_draw))
+        abs_diff_over_se = abs_diff / se_sample_mean if se_sample_mean > 0.0 else 0.0
+
         presets_out[name] = {
             "label": label,
             "zone_filter": filter_desc,
@@ -316,8 +320,11 @@ def build_zone_presets(
             "n_sample": int(n_draw),
             "redrawn_to_1000": redrawn,
             "mean_p_a_zone": round(mean_p_zone, 6),
+            "sd_p_a_zone": round(sd_p_zone, 6),
+            "se_sample_mean": round(se_sample_mean, 6),
             "mean_p_a_sample": round(mean_p_sample, 6),
             "abs_mean_p_a_diff": round(abs_diff, 6),
+            "abs_diff_over_se": round(abs_diff_over_se, 4),
             "side_shares_zone": _side_shares(zone_df),
             "side_shares_sample": _side_shares(sample_df),
             "mirror_diagnostic": _mirror_diagnostic(name, zone_df, model),
