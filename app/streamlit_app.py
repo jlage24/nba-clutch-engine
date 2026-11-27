@@ -42,6 +42,7 @@ from app.formatting import (  # noqa: E402
     format_map_limitation_note,
     format_sensitivity_table,
     format_spot_headline,
+    format_spot_position,
     format_state_headline,
     is_rare_shot_type,
     parse_map_selection,
@@ -333,23 +334,23 @@ def _render_decision_tab(
         c1, c2, c3 = st.columns(3, vertical_alignment="bottom")
         with c1:
             custom_x_ft = st.number_input(
-                "Left-right (ft)",
+                "Left or right of the basket (ft, negative = left)",
                 min_value=-25.0,
                 max_value=25.0,
                 step=0.5,
                 format="%.1f",
                 key="custom_x_ft",
-                help="Negative is left of the basket, positive is right (0.0 ft is the hoop line).",
+                help="Negative is left of the basket, positive is right, 0.0 ft is in line with it.",
             )
         with c2:
             custom_y_ft = st.number_input(
-                "Distance from hoop line (ft)",
+                "In front of the basket (ft, negative = behind it)",
                 min_value=-5.0,
                 max_value=42.0,
                 step=0.5,
                 format="%.1f",
                 key="custom_y_ft",
-                help="0.0 ft is even with the basket, -4.8 ft is the baseline, 42.0 ft is near half court.",
+                help="0.0 ft is the centre of the hoop, -4.75 ft is the baseline behind it, and 42.0 ft is near half court.",
             )
         with c3:
             custom_shot_type = st.selectbox(
@@ -543,21 +544,22 @@ def _render_map_tab(
     cell_info = lookup_cell(heatmap, inspect_x_tenths, inspect_y_tenths)
     metric_key = metric_label_to_key[metric_label]
 
-    c_plot, c_panel = st.columns([1.5, 1.0], vertical_alignment="top")
+    c_plot, c_panel = st.columns([1.85, 1.0], vertical_alignment="top")
     with c_plot:
         chart = build_altair_court_chart(
             heatmap,
             metric=metric_key,  # type: ignore[arg-type]
             selected_xy_tenths=(inspect_x_tenths, inspect_y_tenths),
         )
-        st.altair_chart(
-            chart,
-            width="stretch",
-            theme=None,
-            on_select=_on_map_select,
-            key="map_chart",
-            alt=f"Interactive half-court map showing {metric_label.lower()} across unmasked 1 ft spots.",
-        )
+        with st.container(horizontal=True, wrap=False):
+            st.altair_chart(
+                chart,
+                width="content",
+                theme=None,
+                on_select=_on_map_select,
+                key="map_chart",
+                alt=f"Interactive half-court map showing {metric_label.lower()} across unmasked 1 ft spots.",
+            )
         with st.expander("How to read this map", expanded=False):
             st.caption(MAP_TYPICAL_MIX_CAPTION)
             st.caption(MAP_MODEL_STEPS_CAPTION)
@@ -570,9 +572,7 @@ def _render_map_tab(
                     cell_info["shot_distance_ft"], int(cell_info["shot_value"])
                 )
             )
-            st.caption(
-                f"Position: {inspect_x_ft:.1f} ft left-right · {inspect_y_ft:.1f} ft depth"
-            )
+            st.caption(format_spot_position(inspect_x_ft, inspect_y_ft))
             if not cell_info["in_mask"]:
                 st.warning("Outside historical shot coverage for this selection.")
             else:
@@ -596,22 +596,22 @@ def _render_map_tab(
 
         with st.expander("Exact position", expanded=False):
             st.number_input(
-                "Left-right (ft)",
+                "Left or right of the basket (ft, negative = left)",
                 min_value=-25.0,
                 max_value=25.0,
                 step=0.5,
                 format="%.1f",
                 key="inspect_x_ft",
-                help="Negative is left of the basket, positive is right.",
+                help="Negative is left of the basket, positive is right, 0.0 ft is in line with it.",
             )
             st.number_input(
-                "Distance from hoop line (ft)",
+                "In front of the basket (ft, negative = behind it)",
                 min_value=-5.0,
                 max_value=42.0,
                 step=0.5,
                 format="%.1f",
                 key="inspect_y_ft",
-                help="0.0 ft is even with the basket, -4.8 ft is the baseline, 42.0 ft is near half court.",
+                help="0.0 ft is the centre of the hoop, -4.75 ft is the baseline behind it, and 42.0 ft is near half court.",
             )
 
 

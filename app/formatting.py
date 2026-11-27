@@ -126,6 +126,27 @@ def format_spot_headline(distance_ft: float, shot_value: int) -> str:
     return f"{int(round(distance_ft))} ft from the basket · {shot_kind}"
 
 
+def format_spot_position(x_ft: float, y_ft: float) -> str:
+    """Format court coordinates relative to the hoop centre in plain visitor language."""
+    x_rounded = round(float(x_ft), 1)
+    y_rounded = round(float(y_ft), 1)
+    if abs(x_rounded) < 0.05:
+        x_text = "in line with the basket"
+    elif x_rounded < 0:
+        x_text = f"{abs(x_rounded):.1f} ft left of the basket"
+    else:
+        x_text = f"{x_rounded:.1f} ft right of the basket"
+
+    if abs(y_rounded) < 0.05:
+        y_text = "in line with the hoop"
+    elif y_rounded < 0:
+        y_text = f"{abs(y_rounded):.1f} ft behind it"
+    else:
+        y_text = f"{y_rounded:.1f} ft in front of it"
+
+    return f"{x_text} · {y_text}"
+
+
 def parse_map_selection(selection_state: Any) -> tuple[float, float] | None:
     """Convert an Altair/Streamlit selection payload into clamped coordinates in tenths of a foot."""
     if selection_state is None:
@@ -421,10 +442,19 @@ def build_altair_court_chart(
     heatmap: HeatmapResult,
     metric: Literal["p_make", "xp", "v"],
     selected_xy_tenths: tuple[float, float] | None = None,
-    height: int = 440,
+    width: int = 550,
+    height: int = 517,
 ) -> alt.LayerChart:
-    """Build an interactive layered Altair half-court chart with click selection."""
+    """Build an interactive layered Altair half-court chart with equal x/y scales."""
     df_spots = build_heatmap_dataframe(heatmap, metric)
+    if not df_spots.empty:
+        df_spots["position"] = [
+            format_spot_position(xf, yf)
+            for xf, yf in zip(df_spots["x_ft"], df_spots["y_ft"])
+        ]
+    else:
+        df_spots["position"] = pd.Series(dtype=str)
+
     court_df = get_court_polylines(units="feet")
     solid_lines = court_df[~court_df["dashed"]].copy()
     dashed_lines = court_df[court_df["dashed"]].copy()
@@ -451,12 +481,12 @@ def build_altair_court_chart(
     else:
         vmin, vmax = default_min, default_max
 
-    x_scale = alt.Scale(domain=[-25.2, 25.2], nice=False, zero=False)
-    y_scale = alt.Scale(domain=[-5.0, 42.5], nice=False, zero=False)
+    x_scale = alt.Scale(domain=[-25.0, 25.0], nice=False, zero=False)
+    y_scale = alt.Scale(domain=[-4.75, 42.25], nice=False, zero=False)
 
     rect_layer = (
         alt.Chart(df_spots)
-        .mark_rect()
+        .mark_rect(clip=True, strokeWidth=0)
         .encode(
             x=alt.X("x0:Q", scale=x_scale, axis=None),
             x2="x1:Q",
@@ -469,7 +499,7 @@ def build_altair_court_chart(
                     title=metric_title,
                     orient="bottom",
                     direction="horizontal",
-                    gradientLength=160,
+                    gradientLength=200,
                     format=legend_fmt,
                 ),
             ),
@@ -537,15 +567,14 @@ def build_altair_court_chart(
     )
     hit_layer = (
         alt.Chart(df_spots)
-        .mark_rect(opacity=0.001)
+        .mark_rect(opacity=0.001, clip=True, strokeWidth=0)
         .encode(
             x=alt.X("x0:Q", scale=x_scale),
             x2="x1:Q",
             y=alt.Y("y0:Q", scale=y_scale),
             y2="y1:Q",
             tooltip=[
-                alt.Tooltip("x_ft:Q", title="Left-right (ft)", format=".1f"),
-                alt.Tooltip("y_ft:Q", title="Depth (ft)", format=".1f"),
+                alt.Tooltip("position:N", title="Spot"),
                 alt.Tooltip("distance_ft:Q", title="From basket (ft)", format=".0f"),
                 alt.Tooltip("shot_kind:N", title="Shot"),
                 alt.Tooltip("value_label:N", title=metric_title),
@@ -557,7 +586,11 @@ def build_altair_court_chart(
 
     return (
         alt.layer(*layers)
-        .properties(height=height)
+        .properties(
+            width=width,
+            height=height,
+            autosize=alt.AutoSizeParams(type="pad", contains="padding"),
+        )
         .configure(background="#090f1a", padding={"left": 4, "right": 4, "top": 6, "bottom": 6})
         .configure_view(strokeWidth=0, fill="#111928")
         .configure_legend(labelColor="#f1f5f9", titleColor="#f1f5f9", titleFontSize=12, labelFontSize=11)
