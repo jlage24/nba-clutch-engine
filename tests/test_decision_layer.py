@@ -339,3 +339,56 @@ def test_runs_in_copy_without_data_and_models(tmp_path: Path) -> None:
         check=True,
     )
     assert proc.returncode == 0
+
+
+def test_tie_value_behavior_and_validation(monkeypatch, model, presets) -> None:
+    """tie_value=0 gives V=P_ahead; tie_value=1 gives V=P_ahead+P_tied; invalid raises ValueError."""
+    monkeypatch.setattr(dl, "predict_make_probability", _fake_predict_factory({2: 0.60, 3: 0.35}))
+    opts = [SHOT_2PT, SHOT_3PT]
+    state = {"time_left_sec": 8.0, "margin": -2}
+
+    res_0 = evaluate_options(state, opts, tie_value=0.0, model=model, presets=presets)
+    assert res_0.meta["tie_value"] == 0.0
+    np.testing.assert_allclose(res_0.table["v"], res_0.table["p_ahead"], atol=1e-12)
+    assert res_0.table.set_index("label").loc["Custom Top 3PT", "rank_v"] == 1
+
+    res_1 = evaluate_options(state, opts, tie_value=1.0, model=model, presets=presets)
+    assert res_1.meta["tie_value"] == 1.0
+    np.testing.assert_allclose(
+        res_1.table["v"], res_1.table["p_ahead"] + res_1.table["p_tied"], atol=1e-12
+    )
+    assert res_1.table.set_index("label").loc["Custom Mid 2PT", "rank_v"] == 1
+
+    for bad_tv in (-0.01, 1.01, True, float("nan"), float("inf")):
+        with pytest.raises(ValueError):
+            evaluate_options(state, opts, tie_value=bad_tv, model=model, presets=presets)
+
+
+def test_v_gap_first_second(model, presets) -> None:
+    """meta['v_gap_first_second'] equals V(rank 1) - V(rank 2), or None if closed or 1 option."""
+    res_open = evaluate_options(
+        {"time_left_sec": 8.0, "margin": -2},
+        ["above_the_break_3", "corner_three", "restricted_area"],
+        model=model,
+        presets=presets,
+    )
+    ordered = res_open.table.sort_values("rank_v").reset_index(drop=True)
+    expected_gap = float(ordered.loc[0, "v"] - ordered.loc[1, "v"])
+    assert res_open.meta["v_gap_first_second"] == pytest.approx(expected_gap, abs=1e-12)
+
+    res_single = evaluate_options(
+        {"time_left_sec": 8.0, "margin": -2},
+        ["corner_three"],
+        model=model,
+        presets=presets,
+    )
+    assert res_single.meta["v_gap_first_second"] is None
+
+    res_closed = evaluate_options(
+        {"time_left_sec": 30.0, "margin": -2},
+        ["corner_three", "restricted_area"],
+        model=model,
+        presets=presets,
+    )
+    assert res_closed.meta["v_gap_first_second"] is None
+
