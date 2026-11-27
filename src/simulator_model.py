@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from typing import Any, Sequence, Union
+from typing import Any, Literal, Sequence, Union
 
 import numpy as np
 import pandas as pd
@@ -264,11 +264,50 @@ def _resolve_player_offsets(
     return resolved
 
 
+_SHIFT_BOUND_KEYS = {
+    "point": "shift_logit",
+    "low": "ci_lower_logit",
+    "high": "ci_upper_logit",
+}
+
+
+def _resolve_shift(
+    model: ExportedModel,
+    shot_values: np.ndarray,
+    use_model_b: bool,
+    shift_mode: str,
+    shift_bound: str,
+) -> Union[float, np.ndarray]:
+    """Return scalar or per-shot logit shift from exported clutch_shift.json."""
+    if shift_mode not in {"overall", "by_shot_type", "none"}:
+        raise ValueError(
+            f"Unknown shift_mode {shift_mode!r}. Expected 'overall', 'by_shot_type', or 'none'."
+        )
+    if shift_bound not in _SHIFT_BOUND_KEYS:
+        raise ValueError(
+            f"Unknown shift_bound {shift_bound!r}. Expected 'point', 'low', or 'high'."
+        )
+    if shift_mode == "none":
+        return 0.0
+
+    bound_key = _SHIFT_BOUND_KEYS[shift_bound]
+    prefix = "model_b" if use_model_b else "model_a"
+    if shift_mode == "overall":
+        return float(model.clutch_shift_info[prefix][bound_key])
+
+    exp = model.clutch_shift_info["exploratory"]
+    shift_2pt = float(exp[f"{prefix}_2pt"][bound_key])
+    shift_3pt = float(exp[f"{prefix}_3pt"][bound_key])
+    return np.where(shot_values == 3, shift_3pt, shift_2pt)
+
+
 def predict_make_probability(
     model: ExportedModel,
     shots: Union[pd.DataFrame, Sequence[dict[str, Any]], dict[str, Any]],
     player_id: Union[int, str, Sequence[Any], pd.Series, np.ndarray, None] = None,
     clutch_shift: bool = True,
+    shift_mode: Literal["overall", "by_shot_type", "none"] = "overall",
+    shift_bound: Literal["point", "low", "high"] = "point",
 ) -> np.ndarray:
     """Predict shot make probabilities for one or more shots.
 
@@ -283,9 +322,25 @@ def predict_make_probability(
         ``None``, uses Model A (no shooter offset). When provided, uses Model B
         (unknown/absent players receive offset 0 so ``p_B == p_A``).
     clutch_shift:
-        If True (default), adds the constant logit-scale clutch shift; if False,
-        returns the baseline ``p_A`` or ``p_B`` probability.
+        If True (default), adds the logit-scale clutch shift selected by
+        ``shift_mode`` and ``shift_bound``; if False, returns the baseline
+        ``p_A`` or ``p_B`` probability.
+    shift_mode:
+        ``"overall"`` (default), ``"by_shot_type"`` (exploratory 2PT/3PT split),
+        or ``"none"`` (no shift).
+    shift_bound:
+        ``"point"`` (default), ``"low"`` (95% CI lower bound), or ``"high"``
+        (95% CI upper bound) of the selected clutch shift.
     """
+    if shift_mode not in {"overall", "by_shot_type", "none"}:
+        raise ValueError(
+            f"Unknown shift_mode {shift_mode!r}. Expected 'overall', 'by_shot_type', or 'none'."
+        )
+    if shift_bound not in _SHIFT_BOUND_KEYS:
+        raise ValueError(
+            f"Unknown shift_bound {shift_bound!r}. Expected 'point', 'low', or 'high'."
+        )
+
     X = prepare_features(shots, model, clamp_distance=True)
     if X.empty:
         return np.empty(0, dtype=float)
@@ -297,9 +352,9 @@ def predict_make_probability(
     p_high = float(pred_cfg["p_b_clip_high"])
     eps = float(pred_cfg["logit_clip_eps"])
 
-    if player_id is None:
+    use_model_b = player_id is not None
+    if not use_model_b:
         p_base = p_a
-        shift = model.clutch_shift_a if clutch_shift else 0.0
     else:
         offsets = _resolve_player_offsets(player_id, len(X), model.player_offsets)
         p_base = np.where(
@@ -307,9 +362,18 @@ def predict_make_probability(
             p_a,
             np.clip(p_a + offsets, p_low, p_high),
         )
-        shift = model.clutch_shift_b if clutch_shift else 0.0
 
-    if not clutch_shift or shift == 0.0:
+    if not clutch_shift or shift_mode == "none":
+        return p_base
+
+    shift = _resolve_shift(
+        model=model,
+        shot_values=X["SHOT_VALUE"].to_numpy(dtype=int),
+        use_model_b=use_model_b,
+        shift_mode=shift_mode,
+        shift_bound=shift_bound,
+    )
+    if isinstance(shift, float) and shift == 0.0:
         return p_base
 
     eta = _logit(np.clip(p_base, eps, 1.0 - eps))
