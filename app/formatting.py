@@ -1,4 +1,4 @@
-"""Pure formatting, wording, and template helpers for the Streamlit simulator app.
+"""Pure formatting, wording, selection-parsing, and chart helpers for the Streamlit app.
 
 No Streamlit runtime dependency; all functions are deterministic and unit-testable
 without ``data/`` or ``models/``.
@@ -6,12 +6,15 @@ without ``data/`` or ``models/``.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 import sys
-from typing import Any
+from typing import Any, Literal
 
+import altair as alt
 import matplotlib.figure
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,8 +23,15 @@ if str(ROOT) not in sys.path:
 
 from src.decision_layer import DecisionResult, GameState  # noqa: E402
 from src.heatmap import (  # noqa: E402
+    HEATMAP_X_MAX,
+    HEATMAP_X_MIN,
+    HEATMAP_Y_MAX,
+    HEATMAP_Y_MIN,
     MIN_GROUP_WEIGHT_PER_1000,
     TYPICAL_MIX_KEY,
+    HeatmapResult,
+    build_heatmap_dataframe,
+    get_court_polylines,
     get_distance_weights,
 )
 
@@ -43,7 +53,7 @@ MAP_TYPICAL_MIX_CAPTION = (
     "at the same spot differ."
 )
 MAP_MODEL_STEPS_CAPTION = (
-    "Small steps between neighbouring cells come from the model (distance is measured "
+    "Small steps between neighbouring spots come from the model (distance is measured "
     "in whole feet and the model splits on thresholds), not from the data."
 )
 OUTCOME_SCORE_TOOLTIP = (
@@ -72,12 +82,17 @@ DEFAULT_PRESET_KEYS = [
     "restricted_area",
 ]
 
-EXAMPLE_SCENARIOS: list[tuple[str, int, int, int]] = [
-    ("Down 3 · 8 s", 4, 8, -3),
-    ("Down 2 · 8 s", 4, 8, -2),
-    ("Down 1 · 6 s", 4, 6, -1),
-    ("Tied · 5 s", 4, 5, 0),
+EXAMPLE_SCENARIOS: list[tuple[str, str, int, int]] = [
+    ("Down 3 · 8 s", "4th quarter", 8, -3),
+    ("Down 2 · 8 s", "4th quarter", 8, -2),
+    ("Down 1 · 6 s", "4th quarter", 6, -1),
+    ("Tied · 5 s", "4th quarter", 5, 0),
 ]
+
+PERIOD_OPTIONS = {
+    "4th quarter": 4,
+    "Overtime": 5,
+}
 
 SHIFT_MODE_OPTIONS = {
     "Off": "none",
@@ -103,6 +118,47 @@ def format_state_headline(state: GameState) -> str:
         period_text = f"Period {state.period}"
 
     return f"{margin_text} · {int(round(state.time_left_sec))} s left · {period_text}"
+
+
+def format_spot_headline(distance_ft: float, shot_value: int) -> str:
+    """Format inspected spot distance and shot value in plain visitor language."""
+    shot_kind = "three-pointer" if int(shot_value) == 3 else "two-pointer"
+    return f"{int(round(distance_ft))} ft from the basket · {shot_kind}"
+
+
+def parse_map_selection(selection_state: Any) -> tuple[float, float] | None:
+    """Convert an Altair/Streamlit selection payload into clamped coordinates in tenths of a foot."""
+    if selection_state is None:
+        return None
+
+    selection_dict: Any = None
+    if isinstance(selection_state, Mapping):
+        selection_dict = selection_state.get("selection", selection_state)
+    elif hasattr(selection_state, "selection"):
+        selection_dict = getattr(selection_state, "selection")
+
+    if not isinstance(selection_dict, Mapping):
+        return None
+
+    points = selection_dict.get("spot")
+    if not isinstance(points, (list, tuple)) or len(points) == 0:
+        return None
+
+    last = points[-1]
+    if not isinstance(last, Mapping):
+        return None
+    if "x_ft" not in last or "y_ft" not in last:
+        return None
+
+    try:
+        x_tenths = round(float(last["x_ft"]) * 10.0, 1)
+        y_tenths = round(float(last["y_ft"]) * 10.0, 1)
+    except (TypeError, ValueError):
+        return None
+
+    x_clamped = min(max(x_tenths, HEATMAP_X_MIN), HEATMAP_X_MAX)
+    y_clamped = min(max(y_tenths, HEATMAP_Y_MIN), HEATMAP_Y_MAX)
+    return float(x_clamped), float(y_clamped)
 
 
 def build_preset_catalog(presets: dict[str, dict[str, Any]]) -> tuple[list[str], dict[str, str]]:
@@ -156,20 +212,20 @@ def format_exploratory_shift_note(clutch_shift_info: dict[str, Any]) -> str:
 
 
 def format_map_limitation_note(court_defaults: dict[str, Any]) -> str:
-    """Format the rim and within-cell bunching limitation notes from court_defaults.json."""
+    """Format the rim and within-area bunching limitation notes from court_defaults.json."""
     pc = court_defaults["checks"]["cell_level_typical_mix_vs_actual"]
     cd = court_defaults["checks"]["cell_centre_diagnostic"]
     mc = pc["max_diff_cell"]
     return (
         f"Within about 4 ft of the rim, the typical mix can understate real shots because "
         f"dunk share varies by angle while the mix depends only on distance (largest 2 ft "
-        f"cell gap: {mc['n_shots']} shots, {mc['dunk_share']:.1%} dunks, mix "
+        f"zone gap: {mc['n_shots']} shots, {mc['dunk_share']:.1%} dunks, mix "
         f"{mc['mean_p_a_typical_mix']:.1%} vs. actual {mc['mean_p_a_actual']:.1%}; "
-        f"weighted mean gap across {pc['n_cells_checked']} cells is "
+        f"weighted mean gap across {pc['n_cells_checked']} zones is "
         f"{pc['weighted_mean_abs_diff']:.4f}). Also, a pointwise map cannot show how "
-        f"shots bunch inside a cell (2 ft cell-centre comparison gives weighted mean gap "
-        f"{cd['weighted_mean_abs_diff']:.4f}, up to {cd['max_abs_diff']:.3f} across "
-        f"{cd['n_cells_ge_threshold']} rim cells)."
+        f"shots bunch inside a 2 ft area (evaluating real shots against area centres "
+        f"gives weighted mean gap {cd['weighted_mean_abs_diff']:.4f}, up to "
+        f"{cd['max_abs_diff']:.3f} across {cd['n_cells_ge_threshold']} rim areas)."
     )
 
 
@@ -285,47 +341,226 @@ def classify_summary_variant(result: DecisionResult) -> str:
     return "neither"
 
 
-def format_decision_summary(result: DecisionResult) -> str:
-    """Generate a concise fixed-template summary from the table and meta."""
+def format_decision_answer_parts(result: DecisionResult) -> tuple[str, str | None, str | None]:
+    """Return ``(main_sentence, next_option_line, stability_line)`` from table and meta."""
     sorted_df = _sorted_result_table(result)
     meta = result.meta
     top = sorted_df.iloc[0]
     top_label = str(top["label"])
     variant = classify_summary_variant(result)
 
+    has_second = len(sorted_df) >= 2
+    second = sorted_df.iloc[1] if has_second else None
+
     if variant == "closed_gate":
         t_left = float(meta["state"]["time_left_sec"])
-        return (
+        top_xp = float(top["xp"])
+        main = (
             f"With {t_left:g} s left, outcome scores are hidden. "
-            f"{top_label} leads at {float(top['xp']):.2f} xP "
-            f"({float(top['p_make']):.1%} make)."
+            f"{top_label} leads in xP at {top_xp:.2f} ({float(top['p_make']):.1%} make)."
         )
+        next_line = (
+            f"Next: {second['label']}, {float(second['xp']):.2f} xP against {top_xp:.2f}."
+            if second is not None
+            else None
+        )
+        return main, next_line, None
 
-    robust_text = "top option unchanged" if meta["ranking_robust"] else "top option changes"
+    stability_line = (
+        "The best option stays the same with or without the clutch adjustment."
+        if meta["ranking_robust"]
+        else "The best option changes with the clutch adjustment."
+    )
+
     if variant == "no_option_changes_end_state":
-        return (
-            f"Every shot gives the same outcome score ({float(top['v']):.2f}). "
-            f"{top_label} leads by xP at {float(top['xp']):.2f}; {robust_text}."
+        top_xp = float(top["xp"])
+        main = (
+            f"No selected shot can tie or take the lead (outcome score "
+            f"{float(top['v']):.2f} for all). {top_label} leads in xP at "
+            f"{top_xp:.2f} ({float(top['p_make']):.1%} make)."
         )
-
-    gap = meta.get("v_gap_first_second")
-    if len(sorted_df) >= 2 and gap is not None:
-        second_label = str(sorted_df.iloc[1]["label"])
-        gap_part = f", +{float(gap):.2f} over {second_label}"
-    else:
-        gap_part = ""
+        next_line = (
+            f"Next: {second['label']}, {float(second['xp']):.2f} xP against {top_xp:.2f}."
+            if second is not None
+            else None
+        )
+        return main, next_line, stability_line
 
     top_v = float(top["v"])
     if variant == "can_lead":
-        outcome_part = f"{float(top['p_ahead']):.1%} to go ahead"
+        main = (
+            f"{top_label} is the best option. It puts the offense ahead "
+            f"{float(top['p_ahead']):.1%} of the time (outcome score {top_v:.2f})."
+        )
     elif variant == "can_tie":
-        outcome_part = f"{float(top['p_tied']):.1%} to tie"
+        main = (
+            f"{top_label} is the best option. It ties the game "
+            f"{float(top['p_tied']):.1%} of the time (outcome score {top_v:.2f})."
+        )
     else:
-        outcome_part = f"{float(top['p_behind']):.1%} behind"
+        main = (
+            f"{top_label} is the best option. It leaves the offense behind "
+            f"{float(top['p_behind']):.1%} of the time (outcome score {top_v:.2f})."
+        )
+
+    next_line = (
+        f"Next: {second['label']}, outcome score {float(second['v']):.2f} against {top_v:.2f}."
+        if second is not None
+        else None
+    )
+    return main, next_line, stability_line
+
+
+def format_decision_summary(result: DecisionResult) -> str:
+    """Return the combined fixed-template answer block text as one string."""
+    parts = format_decision_answer_parts(result)
+    return " ".join(part for part in parts if part)
+
+
+def build_altair_court_chart(
+    heatmap: HeatmapResult,
+    metric: Literal["p_make", "xp", "v"],
+    selected_xy_tenths: tuple[float, float] | None = None,
+    height: int = 440,
+) -> alt.LayerChart:
+    """Build an interactive layered Altair half-court chart with click selection."""
+    df_spots = build_heatmap_dataframe(heatmap, metric)
+    court_df = get_court_polylines(units="feet")
+    solid_lines = court_df[~court_df["dashed"]].copy()
+    dashed_lines = court_df[court_df["dashed"]].copy()
+
+    if metric == "p_make":
+        metric_title = "Make probability"
+        legend_fmt = ".1%"
+        default_min, default_max = 0.15, 0.85
+    elif metric == "xp":
+        metric_title = "Expected points (xP)"
+        legend_fmt = ".2f"
+        default_min, default_max = 0.50, 1.75
+    else:
+        metric_title = "Outcome score"
+        legend_fmt = ".2f"
+        default_min, default_max = 0.00, 1.00
+
+    if not df_spots.empty:
+        vmin = min(default_min, float(df_spots["value"].min()))
+        vmax = max(default_max, float(df_spots["value"].max()))
+        if metric == "v":
+            vmin = max(0.0, float(df_spots["value"].min()))
+            vmax = min(1.0, max(float(df_spots["value"].max()), vmin + 1e-3))
+    else:
+        vmin, vmax = default_min, default_max
+
+    x_scale = alt.Scale(domain=[-25.2, 25.2], nice=False, zero=False)
+    y_scale = alt.Scale(domain=[-5.0, 42.5], nice=False, zero=False)
+
+    rect_layer = (
+        alt.Chart(df_spots)
+        .mark_rect()
+        .encode(
+            x=alt.X("x0:Q", scale=x_scale, axis=None),
+            x2="x1:Q",
+            y=alt.Y("y0:Q", scale=y_scale, axis=None),
+            y2="y1:Q",
+            color=alt.Color(
+                "value:Q",
+                scale=alt.Scale(scheme="viridis", domain=[vmin, vmax]),
+                legend=alt.Legend(
+                    title=metric_title,
+                    orient="bottom",
+                    direction="horizontal",
+                    gradientLength=160,
+                    format=legend_fmt,
+                ),
+            ),
+        )
+    )
+
+    solid_layer = (
+        alt.Chart(solid_lines)
+        .mark_line(color="#cbd5e1", strokeWidth=1.5, tooltip=None)
+        .encode(
+            x=alt.X("x:Q", scale=x_scale),
+            y=alt.Y("y:Q", scale=y_scale),
+            detail="part:N",
+            order="order:Q",
+        )
+    )
+    dashed_layer = (
+        alt.Chart(dashed_lines)
+        .mark_line(color="#cbd5e1", strokeWidth=1.5, strokeDash=[5, 4], tooltip=None)
+        .encode(
+            x=alt.X("x:Q", scale=x_scale),
+            y=alt.Y("y:Q", scale=y_scale),
+            detail="part:N",
+            order="order:Q",
+        )
+    )
+
+    layers: list[alt.Chart] = [rect_layer, solid_layer, dashed_layer]
+
+    if selected_xy_tenths is not None:
+        ix = int(np.argmin(np.abs(heatmap.x_centers - float(selected_xy_tenths[0]))))
+        iy = int(np.argmin(np.abs(heatmap.y_centers - float(selected_xy_tenths[1]))))
+        sx = float(heatmap.x_centers[ix]) / 10.0
+        sy = float(heatmap.y_centers[iy]) / 10.0
+        sel_df = pd.DataFrame(
+            [{"x0": sx - 0.5, "x1": sx + 0.5, "y0": sy - 0.5, "y1": sy + 0.5}]
+        )
+        layers.append(
+            alt.Chart(sel_df)
+            .mark_rect(fill=None, stroke="#f8fafc", strokeWidth=3.5, tooltip=None)
+            .encode(
+                x=alt.X("x0:Q", scale=x_scale),
+                x2="x1:Q",
+                y=alt.Y("y0:Q", scale=y_scale),
+                y2="y1:Q",
+            )
+        )
+        layers.append(
+            alt.Chart(sel_df)
+            .mark_rect(fill=None, stroke="#cd3a29", strokeWidth=2.0, tooltip=None)
+            .encode(
+                x=alt.X("x0:Q", scale=x_scale),
+                x2="x1:Q",
+                y=alt.Y("y0:Q", scale=y_scale),
+                y2="y1:Q",
+            )
+        )
+
+    spot_sel = alt.selection_point(
+        name="spot",
+        fields=["x_ft", "y_ft"],
+        on="click",
+        clear=False,
+        toggle=False,
+    )
+    hit_layer = (
+        alt.Chart(df_spots)
+        .mark_rect(opacity=0.001)
+        .encode(
+            x=alt.X("x0:Q", scale=x_scale),
+            x2="x1:Q",
+            y=alt.Y("y0:Q", scale=y_scale),
+            y2="y1:Q",
+            tooltip=[
+                alt.Tooltip("x_ft:Q", title="Left-right (ft)", format=".1f"),
+                alt.Tooltip("y_ft:Q", title="Depth (ft)", format=".1f"),
+                alt.Tooltip("distance_ft:Q", title="From basket (ft)", format=".0f"),
+                alt.Tooltip("shot_kind:N", title="Shot"),
+                alt.Tooltip("value_label:N", title=metric_title),
+            ],
+        )
+        .add_params(spot_sel)
+    )
+    layers.append(hit_layer)
 
     return (
-        f"{top_label} ranks first with outcome score {top_v:.2f} "
-        f"({outcome_part}{gap_part}). Shift sensitivity: {robust_text}."
+        alt.layer(*layers)
+        .properties(height=height)
+        .configure(background="#090f1a", padding={"left": 4, "right": 4, "top": 6, "bottom": 6})
+        .configure_view(strokeWidth=0, fill="#111928")
+        .configure_legend(labelColor="#f1f5f9", titleColor="#f1f5f9", titleFontSize=12, labelFontSize=11)
     )
 
 
@@ -354,7 +589,6 @@ def render_end_state_bar(
     ax.barh(y, tied, left=ahead, height=0.58, color=c_tied, label="Tied")
     ax.barh(y, behind, left=ahead + tied, height=0.58, color=c_behind, label="Behind")
 
-    # Label every segment wide enough to avoid clutter so color is never the only cue.
     for row_idx in range(len(labels)):
         segments = [
             (0.0, ahead[row_idx], "#090f1a"),

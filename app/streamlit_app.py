@@ -1,4 +1,4 @@
-"""Phase 4c — Step 4b: Polished Streamlit Clutch Decision & Half-Court Simulator App.
+"""Phase 4c: Interactive Streamlit Clutch Decision & Half-Court Simulator App.
 
 Run locally from the repository root with::
 
@@ -27,20 +27,24 @@ from app.formatting import (  # noqa: E402
     MAP_MODEL_STEPS_CAPTION,
     MAP_TYPICAL_MIX_CAPTION,
     OUTCOME_SCORE_TOOLTIP,
+    PERIOD_OPTIONS,
     REPO_URL,
     SENSITIVITY_CAPTION,
     SHIFT_MODE_OPTIONS,
     SHOOTER_NOTE,
+    build_altair_court_chart,
     build_preset_catalog,
     build_shooter_options,
-    format_decision_summary,
+    format_decision_answer_parts,
     format_decision_table,
     format_exploratory_shift_note,
     format_flag_messages,
     format_map_limitation_note,
     format_sensitivity_table,
+    format_spot_headline,
     format_state_headline,
     is_rare_shot_type,
+    parse_map_selection,
     render_end_state_bar,
 )
 from src.decision_layer import GameState, evaluate_options, load_zone_presets  # noqa: E402
@@ -53,7 +57,6 @@ from src.heatmap import (  # noqa: E402
     get_active_shot_types,
     load_court_defaults,
     lookup_cell,
-    render_court_heatmap,
 )
 from src.shot_geometry import compute_shot_distance_and_angle, compute_shot_value  # noqa: E402
 from src.simulator_model import ExportedModel, load_export  # noqa: E402
@@ -72,7 +75,7 @@ if LOGO_PATH.exists():
 def _init_session_defaults() -> None:
     """Initialize widget defaults in session_state once so callbacks stay synchronized."""
     defaults: dict[str, Any] = {
-        "period": 4,
+        "period_label": "4th quarter",
         "time_left_sec": 8,
         "margin": -3,
         "shift_mode_label": "Overall (default)",
@@ -80,17 +83,47 @@ def _init_session_defaults() -> None:
         "time_gate_sec": 24,
         "smooth_lr": True,
         "map_metric": "Outcome score",
+        "use_custom_shot": False,
+        "custom_x_ft": 0.0,
+        "custom_y_ft": 25.0,
+        "inspect_x_ft": 22.5,
+        "inspect_y_ft": 0.5,
+        "_last_map_selection_xy": None,
     }
     for key, val in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = val
 
 
-def _apply_example_state(period: int, time_left_sec: int, margin: int) -> None:
+def _apply_example_state(period_label: str, time_left_sec: int, margin: int) -> None:
     """Update situation inputs from an example scenario button before rerun."""
-    st.session_state["period"] = period
+    st.session_state["period_label"] = period_label
     st.session_state["time_left_sec"] = time_left_sec
     st.session_state["margin"] = margin
+
+
+def _apply_spot_to_custom_shot(x_ft: float, y_ft: float) -> None:
+    """Copy the inspected court spot onto the Decision tab's custom shot."""
+    st.session_state["use_custom_shot"] = True
+    st.session_state["custom_x_ft"] = round(float(x_ft), 1)
+    st.session_state["custom_y_ft"] = round(float(y_ft), 1)
+
+
+def _sync_map_selection(force: bool = False) -> None:
+    """Sync Altair click-selection payload into inspected foot coordinates."""
+    xy = parse_map_selection(st.session_state.get("map_chart"))
+    if xy is None:
+        return
+    if not force and xy == st.session_state.get("_last_map_selection_xy"):
+        return
+    st.session_state["_last_map_selection_xy"] = xy
+    st.session_state["inspect_x_ft"] = round(xy[0] / 10.0, 1)
+    st.session_state["inspect_y_ft"] = round(xy[1] / 10.0, 1)
+
+
+def _on_map_select() -> None:
+    """Callback invoked when the user clicks a spot on the Altair court map."""
+    _sync_map_selection(force=True)
 
 
 @st.cache_resource
@@ -139,13 +172,16 @@ def _render_sidebar(
     model: ExportedModel,
 ) -> tuple[GameState, str | None, str, bool, float, int]:
     st.sidebar.subheader("Situation")
-    period = st.sidebar.selectbox(
+    period_label = st.sidebar.segmented_control(
         "Period",
-        options=[4, 5],
-        format_func=lambda p: "Period 4" if p == 4 else "Overtime",
-        key="period",
+        options=list(PERIOD_OPTIONS.keys()),
+        key="period_label",
+        wrap=True,
     )
-    time_left_sec = st.sidebar.slider(
+    if period_label not in PERIOD_OPTIONS:
+        period_label = "4th quarter"
+    period = PERIOD_OPTIONS[period_label]
+    time_left_sec = st.sidebar.number_input(
         "Time left (seconds)",
         min_value=0,
         max_value=300,
@@ -153,7 +189,7 @@ def _render_sidebar(
         key="time_left_sec",
     )
     margin = st.sidebar.slider(
-        "Score margin before shot (offense - defense)",
+        "Score margin (offense minus defense)",
         min_value=-10,
         max_value=10,
         step=1,
@@ -289,29 +325,31 @@ def _render_decision_tab(
     selected_options: list[str] = [label_to_key[lbl] for lbl in selected_labels]
 
     shot_type_keys = [TYPICAL_MIX_KEY, *get_active_shot_types(court_defaults)]
-    use_custom = st.toggle("Include custom shot", value=False, key="use_custom_shot")
+    use_custom = st.toggle("Include custom shot", key="use_custom_shot")
 
     eval_presets = dict(presets)
     custom_xy: tuple[float, float] | None = None
     if use_custom:
         c1, c2, c3 = st.columns(3, vertical_alignment="bottom")
         with c1:
-            custom_x = st.number_input(
-                "LOC_X (tenths of ft)",
-                min_value=-250,
-                max_value=250,
-                value=0,
-                step=5,
-                key="custom_loc_x",
+            custom_x_ft = st.number_input(
+                "Left-right (ft)",
+                min_value=-25.0,
+                max_value=25.0,
+                step=0.5,
+                format="%.1f",
+                key="custom_x_ft",
+                help="Negative is left of the basket, positive is right (0.0 ft is the hoop line).",
             )
         with c2:
-            custom_y = st.number_input(
-                "LOC_Y (tenths of ft)",
-                min_value=-50,
-                max_value=420,
-                value=250,
-                step=5,
-                key="custom_loc_y",
+            custom_y_ft = st.number_input(
+                "Distance from hoop line (ft)",
+                min_value=-5.0,
+                max_value=42.0,
+                step=0.5,
+                format="%.1f",
+                key="custom_y_ft",
+                help="0.0 ft is even with the basket, -4.8 ft is the baseline, 42.0 ft is near half court.",
             )
         with c3:
             custom_shot_type = st.selectbox(
@@ -322,12 +360,14 @@ def _render_decision_tab(
                 key="custom_shot_type",
             )
 
+        custom_x = round(float(custom_x_ft) * 10.0, 1)
+        custom_y = round(float(custom_y_ft) * 10.0, 1)
         dist_ft, angle_deg = compute_shot_distance_and_angle(
-            float(custom_x), float(custom_y), is_putback=0, clamp_distance=True
+            custom_x, custom_y, is_putback=0, clamp_distance=True
         )
-        shot_val = compute_shot_value(float(custom_x), float(custom_y))
-        custom_xy = (float(custom_x), float(custom_y))
-        st.caption(f"Derived shot: {dist_ft:.0f} ft, {angle_deg:.1f} deg, {shot_val}PT.")
+        shot_val = compute_shot_value(custom_x, custom_y)
+        custom_xy = (custom_x, custom_y)
+        st.caption(f"{format_spot_headline(dist_ft, shot_val)} · {angle_deg:.1f} deg")
 
         if is_rare_shot_type(court_defaults, dist_ft, custom_shot_type):
             st.caption(CUSTOM_SHOT_RARE_WARNING)
@@ -335,8 +375,8 @@ def _render_decision_tab(
         custom_key = "__custom_shot__"
         custom_label = f"Custom ({ACTION_GROUP_LABELS[custom_shot_type]})"
         eval_presets[custom_key] = build_custom_shot_preset(
-            loc_x=float(custom_x),
-            loc_y=float(custom_y),
+            loc_x=custom_x,
+            loc_y=custom_y,
             shot_type=custom_shot_type,
             smooth=smooth,
             court_defaults=court_defaults,
@@ -371,9 +411,16 @@ def _render_decision_tab(
     display_df = format_decision_table(result)
     top_label = str(display_df.iloc[0]["Option"])
 
+    main_sentence, next_line, stability_line = format_decision_answer_parts(result)
     with st.container(border=True):
         st.metric("Best option", top_label)
-        st.write(format_decision_summary(result))
+        st.write(main_sentence)
+        if next_line is not None:
+            st.write(next_line)
+        if stability_line is not None:
+            st.caption(stability_line)
+    if gate_open:
+        st.caption(END_STATE_CAPTION)
 
     if gate_open:
         col_tbl, col_bar = st.columns([1.15, 1.0], vertical_alignment="top")
@@ -395,7 +442,6 @@ def _render_decision_tab(
                 alt="Stacked horizontal bars showing ahead, tied, and behind percentages after the shot.",
             )
             plt.close(bar_fig)
-            st.caption(END_STATE_CAPTION)
     else:
         st.dataframe(
             display_df,
@@ -413,7 +459,7 @@ def _render_decision_tab(
             hide_index=True,
             width="stretch",
             column_config=_sensitivity_column_config(gate_open=gate_open),
-            alt="Clutch-shift sensitivity table across no shift, lower bound, point estimate, and upper bound.",
+            alt="Clutch-adjustment sensitivity table across no shift, lower bound, point estimate, and upper bound.",
         )
         if player_id is not None:
             st.caption(SHOOTER_NOTE)
@@ -434,10 +480,9 @@ def _render_map_tab(
     smooth: bool,
     tie_value: float,
     time_gate_sec: int,
-    use_custom: bool,
-    custom_xy: tuple[float, float] | None,
 ) -> None:
     st.caption(APP_DISCLAIMER)
+    _sync_map_selection(force=False)
 
     gate_open = state.time_left_sec <= float(time_gate_sec)
     metric_label_to_key = {
@@ -458,12 +503,12 @@ def _render_map_tab(
 
     shot_type_keys = [TYPICAL_MIX_KEY, *get_active_shot_types(court_defaults)]
 
-    c_ctrl, c_plot = st.columns([1.0, 1.85], vertical_alignment="top")
-    with c_ctrl:
+    with st.container(horizontal=True, vertical_alignment="bottom", wrap=True):
         metric_label = st.segmented_control(
             "Map metric",
             options=metric_options,
             key="map_metric",
+            wrap=True,
         )
         if metric_label not in metric_options:
             metric_label = metric_options[0]
@@ -474,31 +519,8 @@ def _render_map_tab(
             index=0,
             format_func=lambda k: ACTION_GROUP_LABELS[k],
             key="map_shot_type",
+            width=240,
         )
-
-        default_ix = int(round(custom_xy[0])) if (use_custom and custom_xy is not None) else 225
-        default_iy = int(round(custom_xy[1])) if (use_custom and custom_xy is not None) else 5
-        with st.container(border=True):
-            st.caption("Inspect a court location (tenths of a foot)")
-            ic1, ic2 = st.columns(2)
-            with ic1:
-                inspect_x = st.number_input(
-                    "Inspect LOC_X",
-                    min_value=-250,
-                    max_value=250,
-                    value=default_ix,
-                    step=10,
-                    key="inspect_loc_x",
-                )
-            with ic2:
-                inspect_y = st.number_input(
-                    "Inspect LOC_Y",
-                    min_value=-50,
-                    max_value=420,
-                    value=default_iy,
-                    step=10,
-                    key="inspect_loc_y",
-                )
 
     heatmap = get_cached_heatmap(
         _model=model,
@@ -514,21 +536,45 @@ def _render_map_tab(
         tie_value=tie_value,
     )
 
-    highlight_xy = (
-        custom_xy
-        if (use_custom and custom_xy is not None)
-        else (float(inspect_x), float(inspect_y))
-    )
-    cell_info = lookup_cell(heatmap, float(inspect_x), float(inspect_y))
+    inspect_x_ft = float(st.session_state["inspect_x_ft"])
+    inspect_y_ft = float(st.session_state["inspect_y_ft"])
+    inspect_x_tenths = round(inspect_x_ft * 10.0, 1)
+    inspect_y_tenths = round(inspect_y_ft * 10.0, 1)
+    cell_info = lookup_cell(heatmap, inspect_x_tenths, inspect_y_tenths)
+    metric_key = metric_label_to_key[metric_label]
 
-    with c_ctrl:
+    c_plot, c_panel = st.columns([1.5, 1.0], vertical_alignment="top")
+    with c_plot:
+        chart = build_altair_court_chart(
+            heatmap,
+            metric=metric_key,  # type: ignore[arg-type]
+            selected_xy_tenths=(inspect_x_tenths, inspect_y_tenths),
+        )
+        st.altair_chart(
+            chart,
+            width="stretch",
+            theme=None,
+            on_select=_on_map_select,
+            key="map_chart",
+            alt=f"Interactive half-court map showing {metric_label.lower()} across unmasked 1 ft spots.",
+        )
+        with st.expander("How to read this map", expanded=False):
+            st.caption(MAP_TYPICAL_MIX_CAPTION)
+            st.caption(MAP_MODEL_STEPS_CAPTION)
+            st.caption(format_map_limitation_note(court_defaults))
+
+    with c_panel:
         with st.container(border=True):
+            st.subheader(
+                format_spot_headline(
+                    cell_info["shot_distance_ft"], int(cell_info["shot_value"])
+                )
+            )
             st.caption(
-                f"Cell ({cell_info['cell_x']:.0f}, {cell_info['cell_y']:.0f}) · "
-                f"{cell_info['shot_distance_ft']:.0f} ft · {cell_info['shot_value']}PT"
+                f"Position: {inspect_x_ft:.1f} ft left-right · {inspect_y_ft:.1f} ft depth"
             )
             if not cell_info["in_mask"]:
-                st.warning("Outside the density or shot-type mask.")
+                st.warning("Outside historical shot coverage for this selection.")
             else:
                 st.metric("Make probability", f"{cell_info['p_make']:.1%}")
                 st.metric("Expected points (xP)", f"{cell_info['xp']:.2f}")
@@ -539,25 +585,34 @@ def _render_map_tab(
                         help=OUTCOME_SCORE_TOOLTIP,
                     )
 
-    with c_plot:
-        metric_key = metric_label_to_key[metric_label]
-        fig = render_court_heatmap(
-            heatmap,
-            metric=metric_key,  # type: ignore[arg-type]
-            highlight_xy=highlight_xy,
-        )
-        st.pyplot(
-            fig,
-            clear_figure=True,
-            width="content",
-            alt=f"Half-court heatmap showing {metric_label.lower()} across unmasked 1 ft court cells.",
-        )
-        plt.close(fig)
+            st.button(
+                "Use this spot as a custom shot",
+                key="use_spot_custom",
+                on_click=_apply_spot_to_custom_shot,
+                args=(inspect_x_ft, inspect_y_ft),
+                width="stretch",
+                wrap=True,
+            )
 
-        with st.expander("How to read this map", expanded=False):
-            st.caption(MAP_TYPICAL_MIX_CAPTION)
-            st.caption(MAP_MODEL_STEPS_CAPTION)
-            st.caption(format_map_limitation_note(court_defaults))
+        with st.expander("Exact position", expanded=False):
+            st.number_input(
+                "Left-right (ft)",
+                min_value=-25.0,
+                max_value=25.0,
+                step=0.5,
+                format="%.1f",
+                key="inspect_x_ft",
+                help="Negative is left of the basket, positive is right.",
+            )
+            st.number_input(
+                "Distance from hoop line (ft)",
+                min_value=-5.0,
+                max_value=42.0,
+                step=0.5,
+                format="%.1f",
+                key="inspect_y_ft",
+                help="0.0 ft is even with the basket, -4.8 ft is the baseline, 42.0 ft is near half court.",
+            )
 
 
 def _render_about_tab(
@@ -584,7 +639,7 @@ training binaries.
 - Normal-play baseline: Model A (XGBoost) was fitted on the {data_facts['regular_shots']:,} normal-play shots only. Optional shooter adjustments add shrunk single-season offsets from normal play; players with few shots are pulled toward zero, no player-specific clutch effect is modelled, and this app is not a ranking of players.
 - Clutch shift (clutch gap): Clutch outcomes were used only to estimate a descriptive constant logit shift ({sa['shift_logit']:.3f} for Model A, {sb['shift_logit']:.3f} for Model B) when period >= 4, clock <= 300 s, and margin is within +/- 5. It bundles defense, fatigue, shot selection within a type, and shooter mix; it is descriptive, not causal.
 - Outcome score (called V in docs): Equals P_ahead + tie_value * P_tied using shares of ending ahead, tied or behind after the shot, if nothing else happens. Default tie_value = 0.5 (coin-flip overtime) and the 24-second gate are modelling choices, not estimates.
-- Map defaults: Uses the non-putback typical mix across {len(court_defaults['meta']['active_action_groups'])} shot types and hides 2 ft cells with fewer than {dm['min_shots_threshold']} normal-play shots ({dm['share_regular_shots_in_mask']:.2%} shot coverage).
+- Map defaults: Uses the non-putback typical mix across {len(court_defaults['meta']['active_action_groups'])} shot types and hides 2 ft areas with fewer than {dm['min_shots_threshold']} normal-play shots ({dm['share_regular_shots_in_mask']:.2%} shot coverage).
 
 ### Limitations
 - Single season only ({data_facts['season']}).
@@ -594,8 +649,8 @@ training binaries.
 - Baseline make probability does not vary with time left or margin.
 - Very short clock times may prevent some shot types in practice.
 - The clutch shift covers close late-game shots only; the by-shot-type shift is exploratory (3PT minus 2PT = -0.117 logit, 95% bootstrap interval -0.217 to -0.017, close to zero).
-- Sensitivity columns reflect clutch-shift sensitivity only, not a confidence interval for make probability.
-- Zone presets average over real-shot samples; custom points and map cells inherit Model A left-right differences unless smoothing is on.
+- Sensitivity columns reflect uncertainty in the clutch adjustment only, not a confidence interval for make probability.
+- Zone presets average over real-shot samples; custom points and map spots inherit Model A left-right differences unless smoothing is on.
 - {format_map_limitation_note(court_defaults)}
 
 ### Repository and versions
@@ -614,7 +669,7 @@ def main() -> None:
 
     tab_decision, tab_map, tab_about = st.tabs(["Decision", "Map", "About"])
     with tab_decision:
-        use_custom, custom_xy = _render_decision_tab(
+        _render_decision_tab(
             model=model,
             presets=presets,
             court_defaults=court_defaults,
@@ -635,8 +690,6 @@ def main() -> None:
             smooth=smooth,
             tie_value=tie_value,
             time_gate_sec=time_gate_sec,
-            use_custom=use_custom,
-            custom_xy=custom_xy,
         )
     with tab_about:
         _render_about_tab(model=model, court_defaults=court_defaults)

@@ -20,6 +20,7 @@ from typing import Any, Literal, Optional, Union
 import matplotlib.figure
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -455,6 +456,118 @@ _METRIC_SPEC = {
     "xp": ("Expected points (xP)", "0.00", 0.50, 1.75),
     "v": ("Outcome score", "0.00", 0.00, 1.00),
 }
+
+
+def get_court_polylines(units: Literal["tenths", "feet"] = "feet") -> pd.DataFrame:
+    """Return half-court line geometry matching ``src/court.py:draw_court`` as polylines.
+
+    Parameters
+    ----------
+    units:
+        ``"feet"`` (default) or ``"tenths"`` (NBA coordinate tenths of a foot).
+    """
+    if units not in {"tenths", "feet"}:
+        raise ValueError(f"Unknown units {units!r}. Expected 'tenths' or 'feet'.")
+    scale = 0.1 if units == "feet" else 1.0
+
+    rows: list[dict[str, Any]] = []
+
+    def _add_polyline(part: str, xs: np.ndarray, ys: np.ndarray, dashed: bool = False) -> None:
+        for order, (xv, yv) in enumerate(zip(xs, ys)):
+            rows.append(
+                {
+                    "part": part,
+                    "order": order,
+                    "x": float(xv) * scale,
+                    "y": float(yv) * scale,
+                    "dashed": dashed,
+                }
+            )
+
+    def _arc(cx: float, cy: float, rx: float, ry: float, deg1: float, deg2: float, n: int) -> tuple[np.ndarray, np.ndarray]:
+        theta = np.radians(np.linspace(deg1, deg2, n))
+        return cx + rx * np.cos(theta), cy + ry * np.sin(theta)
+
+    # Exact shapes from src/court.py:draw_court
+    hx, hy = _arc(0.0, 0.0, 7.5, 7.5, 0.0, 360.0, 73)
+    _add_polyline("hoop", hx, hy)
+    _add_polyline(
+        "backboard",
+        np.array([-30.0, 30.0, 30.0, -30.0, -30.0]),
+        np.array([-7.5, -7.5, -8.5, -8.5, -7.5]),
+    )
+    _add_polyline(
+        "outer_paint",
+        np.array([-80.0, 80.0, 80.0, -80.0, -80.0]),
+        np.array([-47.5, -47.5, 142.5, 142.5, -47.5]),
+    )
+    _add_polyline(
+        "inner_paint",
+        np.array([-60.0, 60.0, 60.0, -60.0, -60.0]),
+        np.array([-47.5, -47.5, 142.5, 142.5, -47.5]),
+    )
+    ft_top_x, ft_top_y = _arc(0.0, 142.5, 60.0, 60.0, 0.0, 180.0, 61)
+    _add_polyline("ft_arc_top", ft_top_x, ft_top_y)
+    ft_bot_x, ft_bot_y = _arc(0.0, 142.5, 60.0, 60.0, 180.0, 360.0, 61)
+    _add_polyline("ft_arc_bottom", ft_bot_x, ft_bot_y, dashed=True)
+    ra_x, ra_y = _arc(0.0, 0.0, 40.0, 40.0, 0.0, 180.0, 49)
+    _add_polyline("restricted_arc", ra_x, ra_y)
+    _add_polyline("left_corner_three", np.array([-220.0, -220.0]), np.array([-47.5, 92.5]))
+    _add_polyline("right_corner_three", np.array([220.0, 220.0]), np.array([-47.5, 92.5]))
+    tpa_x, tpa_y = _arc(0.0, 0.0, 237.5, 237.5, 22.0, 158.0, 97)
+    _add_polyline("three_point_arc", tpa_x, tpa_y)
+    _add_polyline(
+        "boundary",
+        np.array([-250.0, 250.0, 250.0, -250.0, -250.0]),
+        np.array([-47.5, -47.5, 422.5, 422.5, -47.5]),
+    )
+    return pd.DataFrame(rows)
+
+
+def build_heatmap_dataframe(
+    heatmap: HeatmapResult,
+    metric: Literal["p_make", "xp", "v"],
+) -> pd.DataFrame:
+    """Return unmasked 1 ft court squares in feet for interactive Altair rendering."""
+    if metric not in _METRIC_SPEC:
+        raise ValueError(f"Unknown metric {metric!r}. Expected one of {tuple(_METRIC_SPEC)}.")
+    if metric == "v" and not heatmap.gate_open:
+        raise ValueError("Outcome score is unavailable when the decision gate is closed.")
+
+    values = getattr(heatmap, metric)
+    rows: list[dict[str, Any]] = []
+    for ix, cx_tenths in enumerate(heatmap.x_centers):
+        for iy, cy_tenths in enumerate(heatmap.y_centers):
+            if not heatmap.mask[ix, iy]:
+                continue
+            val = float(values[ix, iy])
+            if not np.isfinite(val):
+                continue
+            x_ft = float(cx_tenths) / 10.0
+            y_ft = float(cy_tenths) / 10.0
+            dist_ft, _ = compute_shot_distance_and_angle(
+                float(cx_tenths), float(cy_tenths), is_putback=0, clamp_distance=True
+            )
+            sv = int(heatmap.shot_value[ix, iy])
+            if metric == "p_make":
+                val_str = f"{val:.1%}"
+            else:
+                val_str = f"{val:.2f}"
+            rows.append(
+                {
+                    "x0": x_ft - 0.5,
+                    "x1": x_ft + 0.5,
+                    "y0": y_ft - 0.5,
+                    "y1": y_ft + 0.5,
+                    "x_ft": x_ft,
+                    "y_ft": y_ft,
+                    "distance_ft": int(round(dist_ft)),
+                    "shot_kind": "three-pointer" if sv == 3 else "two-pointer",
+                    "value": val,
+                    "value_label": val_str,
+                }
+            )
+    return pd.DataFrame(rows)
 
 
 def render_court_heatmap(
