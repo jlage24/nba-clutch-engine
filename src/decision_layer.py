@@ -188,13 +188,18 @@ def _resolve_options(
     return resolved
 
 
-def _end_state_probs(p: float, shot_value: int, margin: int) -> tuple[float, float, float, float]:
+def _end_state_probs(
+    p: float,
+    shot_value: int,
+    margin: int,
+    tie_value: float = 0.5,
+) -> tuple[float, float, float, float]:
     """Compute (P_ahead, P_tied, P_behind, V) assuming nothing else happens after the shot."""
     make_margin = margin + shot_value
     p_ahead = p * float(make_margin > 0) + (1.0 - p) * float(margin > 0)
     p_tied = p * float(make_margin == 0) + (1.0 - p) * float(margin == 0)
     p_behind = 1.0 - p_ahead - p_tied
-    v = p_ahead + 0.5 * p_tied
+    v = p_ahead + tie_value * p_tied
     return p_ahead, p_tied, p_behind, v
 
 
@@ -202,8 +207,8 @@ def _rank_indices(
     labels: list[str],
     v_vals: list[float],
     xp_vals: list[float],
-) -> tuple[list[int], bool, int]:
-    """Return 1-based ranks, no_option_changes_end_state flag, and index of top option."""
+) -> tuple[list[int], bool, list[int]]:
+    """Return 1-based ranks, no_option_changes_end_state flag, and sorted index order."""
     n = len(labels)
     no_change = (max(v_vals) - min(v_vals)) < END_STATE_TIE_TOL
     if no_change:
@@ -214,7 +219,7 @@ def _rank_indices(
     ranks = [0] * n
     for rank, idx in enumerate(order, start=1):
         ranks[idx] = rank
-    return ranks, no_change, order[0]
+    return ranks, no_change, order
 
 
 def _describe_shifts_used(
@@ -253,14 +258,15 @@ def _describe_shifts_used(
     }
 
 
-def _build_assumptions(shift_mode: str, time_gate_sec: float) -> list[str]:
+def _build_assumptions(shift_mode: str, time_gate_sec: float, tie_value: float) -> list[str]:
     assumptions = [
         "Field goals only: no free throws, fouls on the shot, offensive rebounds, or turnovers are modelled.",
         "No opponent possession after the shot: P_ahead, P_tied, and P_behind apply after the shot if nothing else happens.",
-        "End-state value V = P_ahead + 0.5 * P_tied treats overtime as a coin flip (a pre-specified modelling choice, not an estimate).",
+        f"End-state value V = P_ahead + tie_value * P_tied uses tie_value={tie_value:g} (default 0.5 treats overtime as a coin flip, a pre-specified modelling choice, not an estimate).",
         f"Time gate of {time_gate_sec:g} seconds (default 24.0 s, about one shot clock) is a modelling choice, not estimated from data.",
         "Baseline Model A was fitted on normal-play (REGULAR) shots only; clutch outcomes were used only to estimate the descriptive clutch shift (a clutch gap bundling defense, fatigue, shot selection within shot type, and shooter composition).",
         "Sensitivity bounds (low/high) reflect sensitivity to the clutch shift only and are not a confidence interval for make probability.",
+        "ranking_robust concerns the top-ranked option only (whether rank 1 stays the same across no shift, lower shift bound, point shift, and upper shift bound); lower ranks such as 2 and 3 can swap between shift modes.",
         "Single-season data (2025-26 regular season), no defender or shot-clock tracking, baseline make probability does not depend on time or margin (Phase 3 found no detectable effect), and very short clock times may preclude some shot types.",
         "Zone presets average predictions over fixed samples of real regular-play shots; custom single-point options inherit local Model A structure including left-right coordinate differences.",
     ]
@@ -277,6 +283,7 @@ def evaluate_options(
     player_id: Union[int, str, None] = None,
     shift_mode: Literal["overall", "by_shot_type", "none"] = "overall",
     time_gate_sec: float = 24.0,
+    tie_value: float = 0.5,
     model: Optional[ExportedModel] = None,
     presets: Optional[dict[str, dict[str, Any]]] = None,
 ) -> DecisionResult:
@@ -294,6 +301,14 @@ def evaluate_options(
     gate_sec = float(time_gate_sec)
     if not math.isfinite(gate_sec) or gate_sec < 0.0:
         raise ValueError(f"time_gate_sec must be >= 0, got {time_gate_sec!r}.")
+
+    if isinstance(tie_value, bool) or not isinstance(
+        tie_value, (int, float, np.number)
+    ):
+        raise ValueError(f"tie_value must be numeric, got {tie_value!r}.")
+    tie_val = float(tie_value)
+    if not math.isfinite(tie_val) or tie_val < 0.0 or tie_val > 1.0:
+        raise ValueError(f"tie_value must be in [0, 1], got {tie_value!r}.")
 
     loaded_model = model if model is not None else load_export(DEFAULT_EXPORT_DIR)
     loaded_presets = presets if presets is not None else load_zone_presets(DEFAULT_PRESETS_PATH)
@@ -408,10 +423,10 @@ def evaluate_options(
         p_high_list.append(p_high)
 
         if gate_open:
-            pa, pt, pb, v_pt = _end_state_probs(p_make, shot_val, game_state.margin)
-            _, _, _, v_ns = _end_state_probs(p_no_shift, shot_val, game_state.margin)
-            _, _, _, v_lo = _end_state_probs(p_low, shot_val, game_state.margin)
-            _, _, _, v_hi = _end_state_probs(p_high, shot_val, game_state.margin)
+            pa, pt, pb, v_pt = _end_state_probs(p_make, shot_val, game_state.margin, tie_val)
+            _, _, _, v_ns = _end_state_probs(p_no_shift, shot_val, game_state.margin, tie_val)
+            _, _, _, v_lo = _end_state_probs(p_low, shot_val, game_state.margin, tie_val)
+            _, _, _, v_hi = _end_state_probs(p_high, shot_val, game_state.margin, tie_val)
             p_ahead_list.append(pa)
             p_tied_list.append(pt)
             p_behind_list.append(pb)
@@ -429,7 +444,11 @@ def evaluate_options(
             v_high_list.append(float("nan"))
 
     if gate_open:
-        ranks_v, no_end_state_change, top_point = _rank_indices(labels, v_list, xp_list)
+        ranks_v, no_end_state_change, order_v = _rank_indices(labels, v_list, xp_list)
+        top_point = order_v[0]
+        v_gap_first_second: Optional[float] = (
+            float(v_list[order_v[0]] - v_list[order_v[1]]) if len(order_v) >= 2 else None
+        )
         if no_end_state_change:
             flags.append("no_option_changes_end_state")
 
@@ -440,22 +459,25 @@ def evaluate_options(
         ):
             ranks_xp[idx] = rank
 
-        _, _, top_ns = _rank_indices(
+        _, _, order_ns = _rank_indices(
             labels, v_no_shift_list, [p * v for p, v in zip(p_no_shift_list, shot_values)]
         )
-        _, _, top_lo = _rank_indices(
+        _, _, order_lo = _rank_indices(
             labels, v_low_list, [p * v for p, v in zip(p_low_list, shot_values)]
         )
-        _, _, top_hi = _rank_indices(
+        _, _, order_hi = _rank_indices(
             labels, v_high_list, [p * v for p, v in zip(p_high_list, shot_values)]
         )
-        ranking_robust: Optional[bool] = len({top_point, top_ns, top_lo, top_hi}) == 1
+        ranking_robust: Optional[bool] = (
+            len({top_point, order_ns[0], order_lo[0], order_hi[0]}) == 1
+        )
         no_option_changes: Optional[bool] = no_end_state_change
         rank_v_series = pd.Series(ranks_v, dtype="Int64")
         rank_xp_series = pd.Series(ranks_xp, dtype="Int64")
     else:
         ranking_robust = None
         no_option_changes = None
+        v_gap_first_second = None
         rank_v_series = pd.Series([pd.NA] * len(labels), dtype="Int64")
         rank_xp_series = pd.Series([pd.NA] * len(labels), dtype="Int64")
 
@@ -498,9 +520,11 @@ def evaluate_options(
         ),
         "gate_open": gate_open,
         "time_gate_sec": gate_sec,
+        "tie_value": tie_val,
+        "v_gap_first_second": v_gap_first_second,
         "ranking_robust": ranking_robust,
         "no_option_changes_end_state": no_option_changes,
         "flags": flags,
-        "assumptions": _build_assumptions(shift_mode, gate_sec),
+        "assumptions": _build_assumptions(shift_mode, gate_sec, tie_val),
     }
     return DecisionResult(table=table, meta=meta)
