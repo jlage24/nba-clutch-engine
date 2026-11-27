@@ -26,3 +26,6 @@ models/
 .idea/
 *.swp
 *.swo
+
+# Agent files
+.agents
