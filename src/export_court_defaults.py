@@ -598,7 +598,9 @@ def build_court_defaults(
                 "25 x 24 grid of 2 ft (20 tenths) cells over LOC_X in [-250, 250] and "
                 "LOC_Y in [-50, 430]. Raw mask keeps cells with >= 10 REGULAR shots "
                 "(counts only). Under left-right smoothing, a cell is shown only if both "
-                "it and its mirror cell across LOC_X = 0 are in the raw mask."
+                "it and its mirror cell across LOC_X = 0 are in the raw mask. Coverage "
+                "shares divide by all n_regular_shots (shots outside the box remain in the "
+                "denominator)."
             ),
             "x_min_tenths": GRID_X_MIN,
             "x_max_tenths": GRID_X_MAX,
@@ -613,7 +615,10 @@ def build_court_defaults(
             "n_cells_total": int(nx * ny),
             "n_cells_in_mask": int(mask_2d.sum()),
             "n_cells_in_mask_mirror_and": int(mask_sym_and.sum()),
+            "share_denominator": "n_regular_shots",
+            "n_regular_shots_total": n_reg,
             "n_regular_shots_in_box": n_in_box,
+            "n_regular_shots_outside_box": n_reg - n_in_box,
             "n_regular_shots_in_mask": n_in_mask,
             "share_regular_shots_in_mask": round(n_in_mask / n_reg, 6),
             "n_regular_shots_in_mask_mirror_and": n_in_mask_sym_and,
