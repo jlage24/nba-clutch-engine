@@ -1,0 +1,23 @@
+[browser]
+gatherUsageStats = false
+
+[theme]
+base = "dark"
+primaryColor = "#2563eb"
+backgroundColor = "#090f1a"
+secondaryBackgroundColor = "#111928"
+textColor = "#f1f5f9"
+linkColor = "#60a5fa"
+borderColor = "#26344d"
+codeBackgroundColor = "#111928"
+dataframeHeaderBackgroundColor = "#111928"
+dataframeHeaderTextColor = "#f1f5f9"
+dataframeBorderColor = "#26344d"
+font = "sans-serif"
+headingFont = "sans-serif"
+baseRadius = "0.5rem"
+buttonRadius = "0.5rem"
+showWidgetBorder = true
+showSidebarBorder = true
+paddingTop = "1.5rem"
+paddingBottom = "2rem"
