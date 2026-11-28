@@ -119,9 +119,19 @@ def test_density_mask_schema_coverage_and_checks() -> None:
     assert mask.shape == (25, 24)
     np.testing.assert_array_equal(mask, counts >= 10)
 
+    n_total = payload["meta"]["n_regular_shots"]
     assert dm["n_cells_in_mask"] == int(mask.sum())
+    assert dm["n_cells_in_mask_mirror_and"] == int((mask & mask[::-1, :]).sum())
+    assert dm["share_denominator"] == "n_regular_shots"
+    assert dm["n_regular_shots_total"] == n_total
+    assert dm["n_regular_shots_in_box"] + dm["n_regular_shots_outside_box"] == n_total
     assert dm["n_regular_shots_in_mask"] == int(counts[mask].sum())
+    assert dm["share_regular_shots_in_mask"] == round(dm["n_regular_shots_in_mask"] / n_total, 6)
+    assert dm["share_regular_shots_in_mask_mirror_and"] == round(
+        dm["n_regular_shots_in_mask_mirror_and"] / n_total, 6
+    )
     assert dm["share_regular_shots_in_mask"] >= 0.99
+    assert dm["share_regular_shots_in_mask_mirror_and"] >= 0.99
 
     pc = payload["checks"]["cell_level_typical_mix_vs_actual"]
     assert pc["subset"] == "REGULAR & IS_PUTBACK == 0"

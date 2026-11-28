@@ -278,7 +278,16 @@ def test_5_shooter_selection_changes_probs_and_shows_note() -> None:
     assert chosen_name in name_to_id
 
     at = _run_app()
+    assert NO_SHOOTER_LABEL == "No player"
+    assert any(h.value == "Player (optional)" for h in at.sidebar.subheader)
+    assert at.sidebar.selectbox(key="shooter").label == "Player (optional)"
     assert at.sidebar.selectbox(key="shooter").options == labels
+    sidebar_labels = " ".join(
+        [h.value for h in at.sidebar.subheader]
+        + [s.label for s in at.sidebar.selectbox]
+        + [labels[0]]
+    ).lower()
+    assert "shooter" not in sidebar_labels
     df_none = at.dataframe[0].value.sort_values("Option").reset_index(drop=True)
 
     at.sidebar.selectbox(key="shooter").set_value(chosen_name).run()
@@ -288,6 +297,7 @@ def test_5_shooter_selection_changes_probs_and_shows_note() -> None:
     assert not df_none["Make prob."].equals(df_shooter["Make prob."])
     rendered = _collect_all_rendered_text(at)
     assert SHOOTER_NOTE in rendered
+    assert "shooter adjustments" not in rendered.lower()
     assert f"{float(max_row['offset']):.4f}" not in rendered
 
 
@@ -497,6 +507,11 @@ def test_map_selection_parser_click_inspect_and_use_spot_flow() -> None:
         HEATMAP_Y_MIN,
     )
 
+    assert format_spot_headline(22.0, 3) == "22 ft from the basket · three\u2011pointer"
+    assert format_spot_headline(10.0, 2) == "10 ft from the basket · two\u2011pointer"
+    assert "-" not in format_spot_headline(22.0, 3)
+    assert "-" not in format_spot_headline(10.0, 2)
+
     assert format_spot_position(-9.5, 4.5) == "9.5 ft left of the basket · 4.5 ft in front of it"
     assert format_spot_position(22.5, -2.0) == "22.5 ft right of the basket · 2.0 ft behind it"
     assert format_spot_position(0.0, 25.0) == "in line with the basket · 25.0 ft in front of it"
@@ -595,6 +610,8 @@ def test_altair_chart_spec_and_layout_properties() -> None:
     )
     chart = build_altair_court_chart(hm, metric="v", selected_xy_tenths=(220.0, 10.0))
     spec = chart.to_dict(validate=True)
+    assert spec["width"] == 750
+    assert spec["height"] == 705
     assert spec["height"] / spec["width"] == pytest.approx(470.0 / 500.0, rel=0.0, abs=1e-12)
     assert spec["autosize"] == {"type": "pad", "contains": "padding"}
     assert len(spec["layer"]) == 6
