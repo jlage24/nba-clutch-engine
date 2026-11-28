@@ -442,8 +442,8 @@ def build_altair_court_chart(
     heatmap: HeatmapResult,
     metric: Literal["p_make", "xp", "v"],
     selected_xy_tenths: tuple[float, float] | None = None,
-    width: int = 750,
-    height: int = 705,
+    width: int = 600,
+    height: int = 564,
 ) -> alt.LayerChart:
     """Build an interactive layered Altair half-court chart with equal x/y scales."""
     df_spots = build_heatmap_dataframe(heatmap, metric)
@@ -499,7 +499,7 @@ def build_altair_court_chart(
                     title=metric_title,
                     orient="bottom",
                     direction="horizontal",
-                    gradientLength=260,
+                    gradientLength=210,
                     format=legend_fmt,
                 ),
             ),
