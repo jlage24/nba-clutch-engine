@@ -1,12 +1,44 @@
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="app/assets/nba-clutch.png">
+    <img src="app/assets/nba-clutch-light.png" alt="NBA Clutch Engine logo" width="240">
+  </picture>
+</p>
+
 # NBA Clutch Decision Engine
 
 A sports analytics and machine learning project that models **shot quality in NBA clutch time** and turns it into **Expected Points (xP)** to compare late-game offensive options. It also measures how clutch shooting differs from normal play.
 
-> **Status:** 🚧 Work in progress. The data pipeline, the shot-quality model and the clutch-versus-normal-play analysis (Phases 1 to 3b) are complete for the 2025-26 regular season. The interactive simulator (Phase 4) is planned. See the [Roadmap](#roadmap).
+> **Status:** Phases 1 to 4 are complete for the 2025-26 regular season: the data pipeline, the shot-quality model, the clutch-versus-normal-play analysis and an interactive simulator. More seasons and a replay mode are under consideration. See the [Roadmap](#roadmap).
 
 ![Clutch field-goal percentage by court location](docs/clutch_shot_map.png)
 
 *Field-goal percentage by court location for clutch shots (last 5 minutes, score margin ≤ 5). Only locations with enough attempts are shown.*
+
+## The simulator
+
+An interactive app compares shot options in a late-game situation. You set the score margin, the time left and, if you want, the player taking the shot. For each option the app shows the chance of making the shot, the expected points, and the chance of ending **ahead, tied or behind** after the shot, if nothing else happens. A half-court map shows the same numbers for every spot on the court, and you can click a spot to inspect it.
+
+![Decision tab of the simulator](assets/screenshots/nba-clutch-engine-app-1.png)
+
+*Decision tab: the shot options ranked for the situation you set.*
+
+![Map tab of the simulator](assets/screenshots/nba-clutch-engine-app-2.png)
+
+*Map tab: the same numbers for every spot on the half court. Click a spot to inspect it.*
+
+![About tab of the simulator](assets/screenshots/nba-clutch-engine-app-3.png)
+
+*About tab: the method, the data and the limitations.*
+
+Run it locally. It needs only the small model files in `export/`, which are in the repo, not the downloaded data:
+
+```bash
+pip install -r app/requirements.txt
+streamlit run app/streamlit_app.py
+```
+
+The app is descriptive. It has no defender or shot-clock data, it covers field goals only, and it is not coaching advice. [Part 3](#part-3-the-simulator) explains how it works.
 
 ---
 
@@ -17,7 +49,8 @@ A sports analytics and machine learning project that models **shot quality in NB
 - **Clutch shots go in less often than comparable normal-play shots.** Observed FG% is 43.75% against 47.2% expected, a gap of **3.4 percentage points** (95% interval 2.5 to 4.5). Changing the baseline model moves this number by at most 0.14 points. It is a descriptive gap, not a measured "pressure effect".
 - **The gap is not the same everywhere.** Two-point shots are clearly worse in close games than in late blowouts. Three-point shots are worse late in the game in both. The last minute is the worst part (exploratory).
 - **No player-level differences are detectable.** The data cannot rule out real differences of up to about 5 percentage points, but it cannot show any either.
-- **For the future simulator,** a model trained on normal play plus one clutch correction predicts clutch shots at least as well as a model trained on clutch shots only.
+- **The simulator is built on that result.** A model trained on normal play plus one clutch correction predicts clutch shots at least as well as a model trained on clutch shots only.
+- **Game state barely changes the make probability, but it changes which shot is best.** Down 3 with 8 seconds left, a restricted-area shot has the most expected points (1.28), but a 2-pointer cannot tie. A corner three ranks first instead, and in the model it ties the game about 36% of the time. This is a model output under stated assumptions, not coaching advice.
 
 ## Motivation
 
@@ -25,7 +58,7 @@ Modern analytics tends to penalize mid-range jumpers in favor of layups and thre
 
 > Given the game state, how does shot efficiency shift under pressure, and which shot type and location carry the highest expected value?
 
-The results so far answer both halves. Location and shot type decide most of the value of a shot. And clutch shots do go in less often than comparable shots in normal play, although the data cannot say why.
+The results so far answer both halves. Location and shot type decide most of the value of a shot. And clutch shots do go in less often than comparable shots in normal play, although the data cannot say why. The simulator puts both answers into one tool.
 
 ## Approach
 
@@ -39,9 +72,9 @@ The results so far answer both halves. Location and shot type decide most of the
    xP = P(make | X) × shot value (2 or 3)
    ```
 
-6. **Decide** *(planned)*: in an interactive Streamlit app, compare options for a given game state. In tight situations (e.g. down 3 late), raw xP isn't the right objective, so the simulator will also report the probability of tying or taking the lead.
+6. **Decide.** In an interactive Streamlit app, compare shot options for a given game state. Near the end of a game, raw xP is not the right objective (down 3, a 2-pointer cannot tie), so the app also reports the chance of ending ahead, tied or behind after the shot.
 
-Everything runs locally on a laptop CPU. No GPU and no cloud services.
+Everything runs locally on a laptop CPU, with no GPU. The app needs only the small model files in `export/`, so it can also be hosted.
 
 ### Clutch definition
 
@@ -55,15 +88,18 @@ A shot counts as clutch if it is taken in the **last 5 minutes of the 4th quarte
 | 2. Context enrichment | Merge play-by-play to add pre-shot score margin; filter to clutch shots; validate | ✅ Done (2025-26 regular season) |
 | 3. ML engine | Feature engineering, baselines, XGBoost, calibration, ablation, SHAP, prediction API | ✅ Done (v1) |
 | 3b. Clutch versus normal play | All-shots baseline, clutch residual, late-game control, player-level check, predictive comparison | ✅ Done |
-| 4. Simulator | Streamlit app with game-state inputs and an xP heatmap on the court | ⬜ Planned |
+| 4a. Model export | Portable export of the normal-play model, shooter offsets and clutch shift (`export/`), with a loader that does not need the data | ✅ Done |
+| 4b. Decision layer | Make probability, xP and chance of ending ahead, tied or behind for each shot option (field goals only), with zone presets | ✅ Done |
+| 4c. Simulator app | Streamlit app with a decision tab and a clickable half-court map | ✅ Done |
+| 4d. Replay mode | Play a recorded game event by event | ⬜ Under consideration |
 
 ## Setup
 
-Requires Python 3.10+.
+Requires Python 3.12 or newer (developed on 3.14).
 
 ```bash
-git clone <your-repo-url>
-cd <repo-folder>
+git clone https://github.com/jlage24/nba-clutch-engine.git
+cd nba-clutch-engine
 
 python -m venv venv
 source venv/bin/activate          # Windows: venv\Scripts\activate
@@ -96,6 +132,14 @@ python src/sensitivity.py              # 15. sensitivity checks
 python src/player_clutch.py            # 16. player-level differential
 python src/predictive_comparison.py    # 17. predictive comparison on clutch shots
 
+# Phase 4: simulator
+python src/export_model.py             # 18. portable model export -> export/
+python src/export_zone_presets.py      # 19. zone presets -> export/zone_presets.json
+python src/export_court_defaults.py    # 20. typical shot-type mix and map mask -> export/court_defaults.json
+python src/generate_simulator_doc.py   # 21. docs/simulator_export.md, generated from export/ and docs/
+python src/demo_decision.py            # 22. demo scenarios -> docs/decision_demo.json, docs/decision_layer.md
+streamlit run app/streamlit_app.py     # run the app (needs only export/)
+
 pytest                                 # run the unit tests
 ```
 
@@ -105,6 +149,7 @@ Notes:
 - `fetch_pbp.py --limit 20` downloads only the first 20 games, which is handy for testing the rest of the pipeline quickly.
 - Trained models are written to `models/` (gitignored), including the XGBoost model in portable JSON format.
 - Tests that need generated data or trained models are skipped until the pipeline has run.
+- The app and its tests need only the files in `export/`, which are committed to the repo. Steps 18 to 20 rebuild those files and need the data.
 
 ## Data
 
@@ -353,6 +398,54 @@ The gap between home and away is larger in clutch than in the other sets, but no
 3. **No detectable differences between players** in how much they drop in clutch time (see Players).
 4. **No overtime conclusion.** Overtime clutch shots convert at 40.3% against 44.3% in regulation (949 vs 6,155 shots), but shot mix explains only a small part of that gap, and the sample cannot separate fatigue from noise.
 
+### Part 3: the simulator
+
+Phase 4 turns the results above into an app. It has three layers, each with its own documentation.
+
+**Portable model export** ([docs/simulator_export.md](docs/simulator_export.md)). The app has to run without the downloaded data, so `export/` holds everything it needs (about 1.4 MB in total):
+
+- Model A, refitted once on all 196,198 normal-play shots with the settings chosen in Part 2 and 168 trees (the median of the five cross-fitting folds).
+- One shrunk offset per shooter, for 572 players, estimated from normal-play shots only.
+- The clutch shift: a constant added on the logit scale in clutch situations.
+- Zone presets and court defaults, used by the decision layer and the map (see below).
+
+The make probability is `sigmoid(logit(p_base) + shift)`. Here `p_base` is Model A, or Model A plus the shooter's offset when a shooter is chosen. The loader reproduces the model it was exported from exactly on all 219,160 shots (maximum difference 0).
+
+| Clutch shift (logit scale) | Estimate (95% interval) |
+| :--- | :---: |
+| Model A, all clutch shots | -0.127 (-0.174, -0.081) |
+| Model B, all clutch shots (used when a shooter is chosen) | -0.151 (-0.196, -0.106) |
+| Model B, 2-point shots (exploratory) | -0.105 (-0.159, -0.041) |
+| Model B, 3-point shots (exploratory) | -0.222 (-0.299, -0.141) |
+| Model B, 3-point minus 2-point (exploratory) | -0.117 (-0.217, -0.017) |
+
+Intervals come from 2,000 resamples of whole games. The default uses one shift for all shots. The by-shot-type shifts are exploratory (one of several cuts, and the interval of the difference is close to zero), and the app offers them as an option. The shift is applied only in clutch situations (4th quarter or overtime, last 5 minutes, margin within 5), because that is where it was estimated.
+
+**Decision layer** ([docs/decision_layer.md](docs/decision_layer.md)). After a shot, if nothing else happens, a make adds the shot value to the margin and a miss leaves it unchanged. From the make probability this gives the chance of ending ahead, tied or behind. The **outcome score** (called V in the docs) is P(ahead) + 0.5 × P(tied), so overtime counts as a coin flip (the app lets you change that value). The decision is shown only with 24 seconds or less left, because with more time the shot is not the last chance. The 0.5 and the 24 seconds are modelling choices, not estimates.
+
+Shot options are zone presets: samples of real normal-play shots from a zone (300 to 1,000 shots per zone). Each preset averages over the spots and shot types of its zone.
+
+Down 3 with 8 seconds left (no player chosen, one overall shift):
+
+| Option | Make probability | xP | Ahead | Tied | Outcome score |
+| :--- | ---: | ---: | ---: | ---: | ---: |
+| Corner three | 36.0% | 1.08 | 0% | 36.0% | 0.18 |
+| Above-the-break three | 32.8% | 0.98 | 0% | 32.8% | 0.16 |
+| Long mid-range (16 to 24 ft) | 37.6% | 0.75 | 0% | 0% | 0.00 |
+| Restricted area | 64.2% | 1.28 | 0% | 0% | 0.00 |
+
+A 2-pointer cannot tie here, so the restricted area has the most expected points and an outcome score of 0.
+
+Down 2 with 8 seconds left, the three-pointers can take the lead and the two-pointers can only tie. The corner three ranks first (outcome score 0.36), ahead of the above-the-break three (0.33) and the restricted area (0.32). The order of the corner three and the restricted area depends on the overtime value: it holds while a tie is worth less than 0.56 (the corner-three make probability divided by the restricted-area one). Down 1 with 6 seconds left, any make takes the lead, so the best option is the one most likely to go in, the restricted area (0.64). Tied with 5 seconds left, it is also the restricted area (0.82).
+
+In every demo scenario that has a decision, the best option is the same with and without the clutch shift, and at both ends of the shift's interval. In the down-2 scenario the second and third options swap places when the by-shot-type shift is used. This sensitivity to the shift is not a confidence interval for the make probability, because it leaves out the errors of the baseline model and of the shooter offsets.
+
+**Map and app** ([docs/app.md](docs/app.md)). The map has 1 ft cells and shows the make probability, the expected points or the outcome score, using the same inputs as the decision tab. Three details matter:
+
+- **Shot type.** Each distance has a typical mix of shot types (layups, dunks, pull-ups and so on), taken from normal-play shots, and the map averages over it. You can also pick one shot type. For the 256 two-foot cells with at least 100 normal-play shots, the average gap between the mix and the real shots is 0.004 in make probability (shot-weighted, maximum 0.024). Close to the rim the mix can be off by a few points, because the share of dunks depends on where the shot is taken, while the mix depends only on distance.
+- **Blank cells.** Squares of 2 ft with fewer than 10 normal-play shots are left blank, so the model is not asked about places where nobody shoots.
+- **Left-right smoothing.** Model A uses the signed left-right position, so the probability at a spot and at its mirror image can differ, by up to 4 points at one spot near the rim. By default the map averages each spot with its mirror image. A switch shows the model as it is.
+
 ## Known limitations
 
 Being upfront about what these results can and can't claim:
@@ -366,17 +459,36 @@ Being upfront about what these results can and can't claim:
 - **Assists.** Assisted and unassisted shots aren't equivalent options, and the assist flag only exists for made shots, so it cannot be used as a feature without leaking the outcome.
 - **No free throws or turnovers** in the shot chart, so drawing fouls isn't captured in xP.
 - **One unmatched shot.** 1 of 219,160 shots had no play-by-play match; it is kept as normal play and does not affect any result.
+- **The simulator covers field goals only.** It has no free throws, fouls on the shot, offensive rebounds, turnovers or opponent possession after the shot. The chances of ending ahead, tied or behind are end states if nothing else happens, not win probabilities.
+- **Modelling choices in the decision layer.** The 24-second limit and the value of overtime (0.5 by default) are choices, not estimates, and the ranking of some options depends on them.
+- **Player adjustments in the app** are shrunk estimates from one season of normal play. Players with few shots are pulled toward zero, no player-specific clutch effect is modelled, and the app is not a ranking of players.
+- **Shot type on the map.** The map assumes a typical mix of shot types for each distance. Real shots at the same spot differ.
 
 ## Next steps (under consideration)
 
 - **More seasons**, to replicate the clutch gap and to get a fresh, untouched season for testing.
-- **Simulator with a decision layer.** A candidate xP model is the normal-play baseline plus a constant clutch shift on the logit scale (about -0.15), possibly separate for 2-point and 3-point shots. Game state barely changes the make probability, but it strongly changes which shot is worth taking, so the simulator also needs the chance of tying or taking the lead.
+- **Replay mode.** Play a recorded game event by event and show the decision at each shot. A live mode would come after that.
+- **A fuller decision layer** with free throws, fouls, offensive rebounds and the opponent's possession after the shot.
 - **Finding out why.** Explaining the last-minute gap would need shot-clock or defender data.
 
 ## Project structure
 
 ```text
 .
+├── app/
+│   ├── streamlit_app.py             # the Streamlit app
+│   ├── formatting.py                # text, tables and chart helpers for the app
+│   ├── requirements.txt             # slim requirements to run or host the app
+│   └── assets/                      # logo
+├── .streamlit/
+│   └── config.toml                  # app theme and settings
+├── export/                          # small model files the app needs (committed)
+│   ├── model_a.json                 # normal-play model (XGBoost JSON)
+│   ├── player_offsets.csv           # shrunk shooter offsets
+│   ├── clutch_shift.json            # clutch shifts with intervals
+│   ├── manifest.json                # feature order, categories, limitations
+│   ├── zone_presets.json            # real-shot samples behind the zone presets
+│   └── court_defaults.json          # typical shot-type mix and map mask
 ├── src/
 │   ├── fetch_clutch_shots.py        # download shots per team (cached)
 │   ├── fetch_pbp.py                 # download play-by-play per game (cached)
@@ -396,9 +508,18 @@ Being upfront about what these results can and can't claim:
 │   ├── clutch_effect.py             # clutch residuals, controls, exploratory cuts
 │   ├── sensitivity.py               # sensitivity checks
 │   ├── player_clutch.py             # player-level differential
-│   └── predictive_comparison.py     # predictive comparison on clutch shots
+│   ├── predictive_comparison.py     # predictive comparison on clutch shots
+│   ├── export_model.py              # portable model export -> export/
+│   ├── simulator_model.py           # loader that needs only export/
+│   ├── shot_geometry.py             # court coordinates to model features
+│   ├── export_zone_presets.py       # zone presets -> export/
+│   ├── export_court_defaults.py     # typical mix and map mask -> export/
+│   ├── generate_simulator_doc.py    # writes docs/simulator_export.md from export/ and docs/
+│   ├── decision_layer.py            # make probability, xP, ahead/tied/behind, ranking
+│   ├── heatmap.py                   # half-court maps for the app
+│   └── demo_decision.py             # demo scenarios and docs/decision_layer.md
 ├── tests/                           # pytest unit tests
-├── docs/                            # figures and metrics JSON used in this README
+├── docs/                            # figures, metrics JSON and documentation
 ├── models/                          # gitignored: trained model files
 ├── data/                            # gitignored: raw and processed Parquet files
 ├── requirements.txt
@@ -407,7 +528,7 @@ Being upfront about what these results can and can't claim:
 
 ## Tech stack
 
-Python · pandas · PyArrow/Parquet · nba_api · XGBoost · scikit-learn · SHAP · Matplotlib · pytest · Streamlit *(planned)*
+Python · pandas · PyArrow/Parquet · nba_api · XGBoost · scikit-learn · SHAP · Matplotlib · Streamlit · Altair · pytest
 
 ## License
 
