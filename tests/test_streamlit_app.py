@@ -610,8 +610,8 @@ def test_altair_chart_spec_and_layout_properties() -> None:
     )
     chart = build_altair_court_chart(hm, metric="v", selected_xy_tenths=(220.0, 10.0))
     spec = chart.to_dict(validate=True)
-    assert spec["width"] == 750
-    assert spec["height"] == 705
+    assert spec["width"] == 600
+    assert spec["height"] == 564
     assert spec["height"] / spec["width"] == pytest.approx(470.0 / 500.0, rel=0.0, abs=1e-12)
     assert spec["autosize"] == {"type": "pad", "contains": "padding"}
     assert len(spec["layer"]) == 6
