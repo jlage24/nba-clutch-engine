@@ -198,10 +198,10 @@ def _render_sidebar(
         help="Negative means the offense trails before taking the shot.",
     )
 
-    st.sidebar.subheader("Shooter (optional)")
+    st.sidebar.subheader("Player (optional)")
     shooter_labels, name_to_id = build_shooter_options(model.player_table)
     selected_shooter = st.sidebar.selectbox(
-        "Shooter (optional)",
+        "Player (optional)",
         options=shooter_labels,
         index=0,
         key="shooter",
@@ -218,7 +218,7 @@ def _render_sidebar(
             key="shift_mode_label",
             help=(
                 "Descriptive gap on close late-game shots bundling defense, fatigue, "
-                "shot selection within a type, and shooter mix."
+                "shot selection within a type, and player mix."
             ),
         )
         shift_mode = SHIFT_MODE_OPTIONS[shift_label]
@@ -544,7 +544,7 @@ def _render_map_tab(
     cell_info = lookup_cell(heatmap, inspect_x_tenths, inspect_y_tenths)
     metric_key = metric_label_to_key[metric_label]
 
-    c_plot, c_panel = st.columns([1.85, 1.0], vertical_alignment="top")
+    c_plot, c_panel = st.columns([1.5, 1.0], vertical_alignment="top")
     with c_plot:
         chart = build_altair_court_chart(
             heatmap,
@@ -636,10 +636,10 @@ training binaries.
 
 ### Data and model
 - Data: {data_facts['season']} ({data_facts['total_shots']:,} shots in {data_facts['n_games']:,} games: {data_facts['regular_shots']:,} normal-play shots, {data_facts['late_blowout_shots']:,} late-blowout shots, and {data_facts['clutch_shots']:,} clutch shots in {data_facts['n_clutch_games']:,} games).
-- Normal-play baseline: Model A (XGBoost) was fitted on the {data_facts['regular_shots']:,} normal-play shots only. Optional shooter adjustments add shrunk single-season offsets from normal play; players with few shots are pulled toward zero, no player-specific clutch effect is modelled, and this app is not a ranking of players.
+- Normal-play baseline: Model A (XGBoost) was fitted on the {data_facts['regular_shots']:,} normal-play shots only. Optional player adjustments add shrunk single-season offsets from normal play; players with few shots are pulled toward zero, no player-specific clutch effect is modelled, and this app is not a ranking of players.
 - Clutch shift (clutch gap): Clutch outcomes were used only to estimate a descriptive constant logit shift ({sa['shift_logit']:.3f} for Model A, {sb['shift_logit']:.3f} for Model B) when period >= 4, clock <= 300 s, and margin is within +/- 5. It bundles defense, fatigue, shot selection within a type, and shooter mix; it is descriptive, not causal.
 - Outcome score (called V in docs): Equals P_ahead + tie_value * P_tied using shares of ending ahead, tied or behind after the shot, if nothing else happens. Default tie_value = 0.5 (coin-flip overtime) and the 24-second gate are modelling choices, not estimates.
-- Map defaults: Uses the non-putback typical mix across {len(court_defaults['meta']['active_action_groups'])} shot types and hides 2 ft areas with fewer than {dm['min_shots_threshold']} normal-play shots ({dm['share_regular_shots_in_mask']:.2%} shot coverage).
+- Map defaults: Uses the non-putback typical mix across {len(court_defaults['meta']['active_action_groups'])} shot types and hides 2 ft areas with fewer than {dm['min_shots_threshold']} normal-play shots ({dm['n_regular_shots_in_mask']:,} of all {dm['n_regular_shots_total']:,} normal-play shots, {dm['share_regular_shots_in_mask']:.2%}; {dm['n_regular_shots_outside_box']} fall outside the 2 ft grid).
 
 ### Limitations
 - Single season only ({data_facts['season']}).

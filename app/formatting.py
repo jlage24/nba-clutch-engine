@@ -40,9 +40,9 @@ APP_DISCLAIMER = (
     "Descriptive model from one season of public data. No defender or shot-clock data. "
     "Field goals only. Not coaching advice."
 )
-NO_SHOOTER_LABEL = "No shooter"
+NO_SHOOTER_LABEL = "No player"
 SHOOTER_NOTE = (
-    "Shooter adjustments are shrunk single-season estimates from normal play. "
+    "Player adjustments are shrunk single-season estimates from normal play. "
     "Low-volume players pull toward zero, and this app is not a ranking of players."
 )
 CUSTOM_SHOT_RARE_WARNING = (
@@ -121,8 +121,8 @@ def format_state_headline(state: GameState) -> str:
 
 
 def format_spot_headline(distance_ft: float, shot_value: int) -> str:
-    """Format inspected spot distance and shot value in plain visitor language."""
-    shot_kind = "three-pointer" if int(shot_value) == 3 else "two-pointer"
+    """Format inspected spot distance and shot value without breaking inside compound words."""
+    shot_kind = "three\u2011pointer" if int(shot_value) == 3 else "two\u2011pointer"
     return f"{int(round(distance_ft))} ft from the basket · {shot_kind}"
 
 
@@ -196,7 +196,7 @@ def build_preset_catalog(presets: dict[str, dict[str, Any]]) -> tuple[list[str],
 
 
 def build_shooter_options(player_table: pd.DataFrame) -> tuple[list[str], dict[str, str]]:
-    """Return alphabetically sorted player names with 'No shooter' first (no offsets shown)."""
+    """Return alphabetically sorted player names with 'No player' first (no offsets shown)."""
     pairs = sorted(
         (
             (str(row.PLAYER_NAME), str(int(row.PLAYER_ID)))
@@ -285,7 +285,7 @@ def format_flag_messages(meta: dict[str, Any]) -> list[tuple[str, str]]:
             messages.append(
                 (
                     "info",
-                    "Selected shooter has no regular-season offset; using league "
+                    "Selected player has no regular-season offset; using league "
                     "baseline (offset 0).",
                 )
             )
@@ -442,8 +442,8 @@ def build_altair_court_chart(
     heatmap: HeatmapResult,
     metric: Literal["p_make", "xp", "v"],
     selected_xy_tenths: tuple[float, float] | None = None,
-    width: int = 550,
-    height: int = 517,
+    width: int = 750,
+    height: int = 705,
 ) -> alt.LayerChart:
     """Build an interactive layered Altair half-court chart with equal x/y scales."""
     df_spots = build_heatmap_dataframe(heatmap, metric)
@@ -499,7 +499,7 @@ def build_altair_court_chart(
                     title=metric_title,
                     orient="bottom",
                     direction="horizontal",
-                    gradientLength=200,
+                    gradientLength=260,
                     format=legend_fmt,
                 ),
             ),
